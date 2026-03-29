@@ -236,22 +236,98 @@ Depth: quick | Searches: 3 | Results found: 11 | Unique sources: 10
 
 ## Use Cases
 
-| Use Case | Tool | Example |
-|----------|------|---------|
-| Market research | `novada_research` | "Compare pricing models of top web scraping APIs" |
-| Competitive analysis | `novada_search` + `novada_extract` | Search competitors, then extract their pricing pages |
-| Content aggregation | `novada_crawl` | Crawl a documentation site to build a knowledge base |
-| Lead generation | `novada_search` | "SaaS companies using web scraping in fintech" |
-| SEO monitoring | `novada_search` | Track keyword rankings across Google, Bing, Yandex |
-| Data enrichment | `novada_extract` | Pull structured data from any URL for your pipeline |
+### For AI Agent Developers
+
+| Use Case | Tools | How It Works |
+|----------|-------|-------------|
+| **RAG pipeline data source** | `novada_search` + `novada_extract` | Agent searches for relevant documents, extracts full text, feeds into vector database for retrieval-augmented generation |
+| **Agentic web research** | `novada_research` | Agent receives a complex question, Novada runs multi-step searches and returns a synthesized report with citations — no manual search loop needed |
+| **Real-time knowledge grounding** | `novada_search` | Agent needs facts beyond its training cutoff — one tool call returns current, structured web results |
+| **Tool-augmented chatbots** | `novada_search` + `novada_extract` | Chatbot detects user question needs live data, calls Novada, presents fresh answer with source URLs |
+| **Automated competitive intelligence** | `novada_crawl` + `novada_extract` | Agent crawls competitor websites weekly, extracts pricing/feature changes, generates diff reports |
+
+### For Data Engineers & Analysts
+
+| Use Case | Tools | How It Works |
+|----------|-------|-------------|
+| **Lead generation** | `novada_search` | Search "SaaS companies using AI in healthcare" → structured list of companies with URLs for enrichment |
+| **Price monitoring** | `novada_extract` | Extract product prices from e-commerce URLs on a schedule, detect price changes |
+| **Content aggregation** | `novada_crawl` | Crawl a documentation site (max 20 pages) to build a local knowledge base or training dataset |
+| **Multi-market SEO tracking** | `novada_search` | Track keyword rankings across Google, Bing, Yandex, DuckDuckGo from different countries simultaneously |
+| **News monitoring** | `novada_search` | Monitor breaking news on any topic across multiple search engines in real time |
+
+### For LLM Application Builders
+
+| Use Case | Tools | How It Works |
+|----------|-------|-------------|
+| **LangChain / LlamaIndex tool** | Any | Wrap Novada MCP tools as LangChain tools — agent decides when to search, extract, or research |
+| **Multi-agent workflows** | `novada_research` | Research agent gathers data, analyst agent processes it, writer agent produces report — Novada powers the data layer |
+| **Fact-checking pipeline** | `novada_search` | LLM generates a claim, agent searches for supporting/contradicting evidence, returns verdict with sources |
+| **Document Q&A with web fallback** | `novada_search` + `novada_extract` | If local documents don't have the answer, agent falls back to web search and extraction |
+| **Automated due diligence** | `novada_crawl` + `novada_research` | Crawl a company's website, research their market position, generate investment memo |
+
+### Workflow Examples
+
+**Example 1: AI Research Assistant**
+```
+User: "What are the latest developments in quantum computing?"
+Agent: novada_research({ question: "latest quantum computing breakthroughs 2025 2026", depth: "deep" })
+→ Returns 15+ sources, synthesized report, key findings
+→ Agent summarizes and presents with citations
+```
+
+**Example 2: Competitive Analysis Pipeline**
+```
+Agent: novada_search({ query: "top web scraping APIs comparison" })
+→ Gets list of competitors
+Agent: novada_extract({ url: "https://competitor.com/pricing" })
+→ Extracts pricing details from each competitor
+Agent: Compiles comparison table with pricing, features, limits
+```
+
+**Example 3: Knowledge Base Builder**
+```
+Agent: novada_crawl({ url: "https://docs.example.com", max_pages: 20, strategy: "bfs" })
+→ Crawls entire documentation site
+→ Returns structured content from each page
+Agent: Chunks content, generates embeddings, stores in vector DB
+```
 
 ## Why Novada for AI Agents?
 
-- **Multi-engine search** — Google, Bing, DuckDuckGo, Yahoo, Yandex in one API
-- **100M+ proxy IPs** — Access any website from 195+ countries without blocks
-- **Built for agents** — MCP-native, structured responses, no HTML parsing needed
-- **Research mode** — Multi-step search + synthesis, not just a single query
-- **99.99% uptime** — Production-grade infrastructure trusted by global businesses
+### vs. Direct Web Scraping
+
+| | Direct Scraping | Novada MCP |
+|---|---|---|
+| Setup time | Hours (Playwright, proxies, anti-bot) | 1 command |
+| Blocked by websites | Frequently | Rarely (100M+ rotating IPs) |
+| Structured output | Raw HTML to parse | Clean text, titles, links |
+| Multi-engine search | Build each integration | 5 engines, one API |
+| Maintenance | Scripts break when sites change | Novada handles it |
+
+### vs. Other MCP Search Tools
+
+| Feature | Novada | Tavily | Firecrawl | Brave Search |
+|---------|--------|--------|-----------|-------------|
+| Web search | 5 engines | 1 engine | No | 1 engine |
+| URL extraction | Yes | Yes | Yes | No |
+| Website crawling | Yes (BFS/DFS) | Yes | Yes | No |
+| Multi-step research | Yes | Yes | No | No |
+| Proxy infrastructure | 100M+ IPs, 195 countries | No | No | No |
+| Anti-bot bypass | Built-in | No | Partial | No |
+| Browser rendering | CDP-based | No | Yes | No |
+| Localized results | Country + language | Country | No | Country |
+| Free tier | Yes | Yes | Yes | Yes |
+
+### Key Advantages
+
+- **Multi-engine search** — Google, Bing, DuckDuckGo, Yahoo, Yandex in one API call. No other MCP server offers 5 search engines.
+- **100M+ proxy IPs across 195 countries** — Access any website without blocks, CAPTCHAs, or rate limits. Your agent never gets a 403.
+- **Built for agents, not humans** — MCP-native from day one. Structured responses, no HTML parsing, no browser automation code needed.
+- **Research mode** — Your agent asks one question, Novada performs 3-8 searches, deduplicates sources, and returns a synthesized report. No manual search loops.
+- **99.99% uptime** — Production-grade infrastructure trusted by thousands of global businesses and developers.
+- **Privacy-first** — Novada does not store or log your search queries or extracted content. Your agent's data stays yours.
+- **Active development** — New tools and capabilities added regularly. Built by the team behind [novada.com](https://www.novada.com/).
 
 ## Prerequisites
 
