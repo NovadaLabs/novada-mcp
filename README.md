@@ -148,6 +148,111 @@ Multi-step web research. Performs multiple searches, synthesizes findings into a
 | `question` | string | Yes | — | Research question (min 5 characters) |
 | `depth` | string | No | `"quick"` | Research depth: `quick` (2-3 searches) or `deep` (5-8 searches) |
 
+## Examples (Real Output)
+
+### Search: "best AI agent frameworks 2025"
+
+```
+> novada_search({ query: "best AI agent frameworks 2025", num: 5 })
+
+1. Best AI Agent Frameworks in 2025: A Comprehensive Guide
+   URL: https://www.reddit.com/r/AI_Agents/comments/1hq9il6/...
+   Here's a look at some of the standout frameworks making waves
+   this year: Microsoft AutoGen, Phidata, PromptFlow, OpenAI Swarm.
+
+2. What's the best agent framework in 2025? : r/LLMDevs
+   URL: https://www.reddit.com/r/LLMDevs/comments/1nxlsrq/...
+   I'm diving into autonomous/AI agent systems and trying to figure
+   out which framework is currently the best for building robust,
+   scalable, multi-agent systems.
+
+3. Top AI Agent Frameworks in 2025: Honest Reviews
+   URL: https://buildwithcham.medium.com/...
+   LangGraph for complex, multi-step flows. CrewAI for fast
+   role-based agents. Superagent for anything production-grade.
+
+4. The Ultimate Guide to Agentic AI Frameworks in 2025
+   URL: https://pub.towardsai.net/...
+   Goal-Oriented Thinking. Agents understand objectives, not just
+   commands; They break down complex tasks into subtasks.
+```
+
+### Extract: novada.com
+
+```
+> novada_extract({ url: "https://www.novada.com" })
+
+# Novada Proxy Network | Fast Residential, ISP & Datacenter Proxies
+
+> Access over 100M+ residential, ISP, and datacenter proxies with
+> 99.99% uptime. Novada delivers fast, secure, and scalable proxy
+> & web scraping solutions for global businesses and developers.
+
+## Content
+Proxy Locations: Europe (France, Italy, Germany, Spain, Ukraine),
+North America (USA, Canada, Mexico), South America (Brazil, Argentina)...
+
+## Links (20)
+- https://www.novada.com/residential-proxies
+- https://www.novada.com/scraper-api
+- https://www.novada.com/browser-api
+...
+```
+
+### Research: "How do AI agents use web scraping APIs?"
+
+```
+> novada_research({ question: "How do AI agents use web scraping APIs in production?", depth: "quick" })
+
+# Research Report: How do AI agents use web scraping APIs in production?
+
+Depth: quick | Searches: 3 | Results found: 11 | Unique sources: 10
+
+## Key Findings
+
+1. How AI Agents Are Changing the Future of Web Scraping
+   https://medium.com/@davidfagb/...
+   Instead of using fixed scripts that stop working when a webpage
+   changes, these agents can think, understand, and adjust, making
+   data extraction more reliable.
+
+2. AI Agent Web Scraping: Data Collection and Analysis
+   https://scrapegraphai.com/blog/ai-agent-webscraping
+   Discover how AI agents are transforming web scraping and data
+   collection. Build intelligent scrapers that adapt, extract,
+   and analyze data automatically.
+
+3. Scaling Web Scraping with Data Streaming, Agentic AI
+   https://www.confluent.io/blog/real-time-web-scraping/
+   We built AI Agents to iteratively create code, crawl, and
+   scrape web data at scale using real-time streaming pipelines.
+
+## Sources
+1. [How AI Agents Are Changing Web Scraping](https://medium.com/...)
+2. [AI Agent Web Scraping](https://scrapegraphai.com/...)
+3. [Scaling Web Scraping with Agentic AI](https://www.confluent.io/...)
+...
+```
+
+## Use Cases
+
+| Use Case | Tool | Example |
+|----------|------|---------|
+| Market research | `novada_research` | "Compare pricing models of top web scraping APIs" |
+| Competitive analysis | `novada_search` + `novada_extract` | Search competitors, then extract their pricing pages |
+| Content aggregation | `novada_crawl` | Crawl a documentation site to build a knowledge base |
+| Lead generation | `novada_search` | "SaaS companies using web scraping in fintech" |
+| SEO monitoring | `novada_search` | Track keyword rankings across Google, Bing, Yandex |
+| Data enrichment | `novada_extract` | Pull structured data from any URL for your pipeline |
+
+## Why Novada for AI Agents?
+
+- **Multi-engine search** — Google, Bing, DuckDuckGo, Yahoo, Yandex in one API
+- **100M+ proxy IPs** — Access any website from 195+ countries without blocks
+- **Built for agents** — MCP-native, structured responses, no HTML parsing needed
+- **Research mode** — Multi-step search + synthesis, not just a single query
+- **99.99% uptime** — Production-grade infrastructure trusted by global businesses
+
 ## Prerequisites
 
 - [Novada API key](https://www.novada.com/) — sign up for free
