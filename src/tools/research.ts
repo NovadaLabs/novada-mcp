@@ -1,7 +1,6 @@
 import { fetchWithRetry, USER_AGENT, normalizeUrl } from "../utils/index.js";
+import { SCRAPER_API_BASE } from "../config.js";
 import type { ResearchParams } from "./types.js";
-
-const SCRAPER_API_BASE = "https://scraperapi.novada.com";
 
 export async function novadaResearch(params: ResearchParams, apiKey: string): Promise<string> {
   if (params.question.length < 5) {

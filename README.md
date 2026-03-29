@@ -146,7 +146,7 @@ Multi-step web research. Performs multiple searches, synthesizes findings into a
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `question` | string | Yes | — | Research question (min 5 characters) |
-| `depth` | string | No | `"quick"` | Research depth: `quick` (2-3 searches) or `deep` (5-8 searches) |
+| `depth` | string | No | `"quick"` | Research depth: `quick` (3 searches) or `deep` (5-6 searches) |
 
 ## Examples (Real Output)
 
@@ -309,7 +309,7 @@ Agent: Chunks content, generates embeddings, stores in vector DB
 
 | Feature | Novada | Tavily | Firecrawl | Brave Search |
 |---------|--------|--------|-----------|-------------|
-| Web search | 5 engines | 1 engine | No | 1 engine |
+| Web search | Google + Bing (3 more available) | 1 engine | No | 1 engine |
 | URL extraction | Yes | Yes | Yes | No |
 | Website crawling | Yes (BFS/DFS) | Yes | Yes | No |
 | Multi-step research | Yes | Yes | No | No |
@@ -321,7 +321,7 @@ Agent: Chunks content, generates embeddings, stores in vector DB
 
 ### Key Advantages
 
-- **Multi-engine search** — Google, Bing, DuckDuckGo, Yahoo, Yandex in one API call. No other MCP server offers 5 search engines.
+- **Multi-engine search** — Google (recommended) and Bing fully supported. DuckDuckGo, Yahoo, Yandex available but may have limited reliability depending on Novada's upstream API status.
 - **100M+ proxy IPs across 195 countries** — Access any website without blocks, CAPTCHAs, or rate limits. Your agent never gets a 403.
 - **Built for agents, not humans** — MCP-native from day one. Structured responses, no HTML parsing, no browser automation code needed.
 - **Research mode** — Your agent asks one question, Novada performs 3-8 searches, deduplicates sources, and returns a synthesized report. No manual search loops.

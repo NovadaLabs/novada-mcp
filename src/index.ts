@@ -12,17 +12,16 @@ import {
   novadaExtract,
   novadaCrawl,
   novadaResearch,
-} from "./tools/index.js";
-import type {
-  SearchParams,
-  ExtractParams,
-  CrawlParams,
-  ResearchParams,
+  validateSearchParams,
+  validateExtractParams,
+  validateCrawlParams,
+  validateResearchParams,
 } from "./tools/index.js";
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
-const VERSION = "0.3.0";
+import { VERSION } from "./config.js";
+
 const API_KEY = process.env.NOVADA_API_KEY;
 
 // ─── Tool Definitions ────────────────────────────────────────────────────────
@@ -127,16 +126,16 @@ class NovadaMCPServer {
 
         switch (name) {
           case "novada_search":
-            result = await novadaSearch(args as unknown as SearchParams, API_KEY);
+            result = await novadaSearch(validateSearchParams(args as Record<string, unknown>), API_KEY);
             break;
           case "novada_extract":
-            result = await novadaExtract(args as unknown as ExtractParams);
+            result = await novadaExtract(validateExtractParams(args as Record<string, unknown>));
             break;
           case "novada_crawl":
-            result = await novadaCrawl(args as unknown as CrawlParams);
+            result = await novadaCrawl(validateCrawlParams(args as Record<string, unknown>));
             break;
           case "novada_research":
-            result = await novadaResearch(args as unknown as ResearchParams, API_KEY);
+            result = await novadaResearch(validateResearchParams(args as Record<string, unknown>), API_KEY);
             break;
           default:
             return {

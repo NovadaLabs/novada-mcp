@@ -1,7 +1,6 @@
 import { fetchWithRetry, USER_AGENT } from "../utils/index.js";
-import type { SearchParams } from "./types.js";
-
-const SCRAPER_API_BASE = "https://scraperapi.novada.com";
+import { SCRAPER_API_BASE } from "../config.js";
+import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 
 export async function novadaSearch(params: SearchParams, apiKey: string): Promise<string> {
   const engine = params.engine || "google";
@@ -38,7 +37,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     }
   );
 
-  const data = response.data;
+  const data: NovadaApiResponse = response.data;
 
   if (data.code && data.code !== 200 && data.code !== 0) {
     throw new Error(
@@ -46,13 +45,13 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     );
   }
 
-  const results = data.data?.organic_results || data.organic_results || [];
+  const results: NovadaSearchResult[] = data.data?.organic_results || data.organic_results || [];
   if (results.length === 0) {
     return "No results found for this query.";
   }
 
   return results
-    .map((r: any, i: number) => {
+    .map((r: NovadaSearchResult, i: number) => {
       let url: string = r.url || r.link || "N/A";
       url = unwrapBingUrl(url);
       return `${i + 1}. **${r.title || "Untitled"}**\n   URL: ${url}\n   ${r.description || r.snippet || "No description"}`;

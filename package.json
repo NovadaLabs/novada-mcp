@@ -1,6 +1,6 @@
 {
   "name": "novada-mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "MCP Server for Novada — real-time web data API for AI agents. Search, extract, crawl, and research the web.",
   "type": "module",
   "bin": {
