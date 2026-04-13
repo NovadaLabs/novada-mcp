@@ -20,21 +20,26 @@ const API_KEY = process.env.NOVADA_API_KEY;
 const HELP = `nova v${VERSION} — Novada web data CLI
 
 Usage:
-  nova search <query> [--engine google] [--num 10] [--country us]
+  nova search <query> [--engine google] [--num 10] [--country us] [--time day|week|month|year]
+              [--include domain1,domain2] [--exclude domain1,domain2]
   nova extract <url> [--format markdown|text|html]
-  nova crawl <url> [--pages 5] [--strategy bfs|dfs]
-  nova map <url> [--search <term>] [--limit 50]
-  nova research <question> [--depth quick|deep]
+  nova crawl <url> [--max-pages 5] [--strategy bfs|dfs]
+              [--select "/docs/.*,/api/.*"] [--exclude-paths "/blog/.*"]
+              [--instructions "only API reference pages"]
+  nova map <url> [--search <term>] [--limit 50] [--max-depth 2]
+  nova research <question> [--depth auto|quick|deep|comprehensive] [--focus "technical"]
 
 Environment:
   NOVADA_API_KEY  Your API key (required). Get one at https://www.novada.com
 
 Examples:
-  nova search "best AI agent frameworks 2025"
+  nova search "GPT-5 release" --time week --country us
+  nova search "best AI tools" --include "github.com,arxiv.org"
   nova extract https://example.com --format markdown
-  nova crawl https://docs.example.com --pages 10
-  nova map https://example.com --search "pricing"
-  nova research "How do AI agents use web scraping?" --depth deep
+  nova crawl https://docs.example.com --max-pages 10 --select "/api/.*"
+  nova crawl https://docs.example.com --instructions "only quickstart pages"
+  nova map https://example.com --search "pricing" --max-depth 3
+  nova research "How do AI agents use web scraping?" --depth deep --focus "production use cases"
 `;
 
 function parseArgs(args: string[]): { positional: string; flags: Record<string, string> } {
@@ -88,6 +93,11 @@ async function main() {
             num: flags.num ? parseInt(flags.num) : 10,
             country: flags.country || "",
             language: flags.language || "",
+            time_range: flags.time as "day" | "week" | "month" | "year" | undefined,
+            start_date: flags.from,
+            end_date: flags.to,
+            include_domains: flags.include ? flags.include.split(",").map((d: string) => d.trim()) : undefined,
+            exclude_domains: flags.exclude ? flags.exclude.split(",").map((d: string) => d.trim()) : undefined,
           }),
           API_KEY
         );
@@ -107,8 +117,15 @@ async function main() {
         result = await novadaCrawl(
           validateCrawlParams({
             url: positional,
-            max_pages: flags.pages ? parseInt(flags.pages) : 5,
+            max_pages: flags["max-pages"]
+              ? parseInt(flags["max-pages"])
+              : flags.pages
+                ? parseInt(flags.pages)
+                : 5,
             strategy: (flags.strategy as "bfs" | "dfs") || "bfs",
+            instructions: flags.instructions,
+            select_paths: flags.select ? flags.select.split(",").map((p: string) => p.trim()) : undefined,
+            exclude_paths: flags["exclude-paths"] ? flags["exclude-paths"].split(",").map((p: string) => p.trim()) : undefined,
           }),
           API_KEY
         );
@@ -120,6 +137,7 @@ async function main() {
             url: positional,
             search: flags.search,
             limit: flags.limit ? parseInt(flags.limit) : 50,
+            max_depth: flags["max-depth"] ? parseInt(flags["max-depth"]) : 2,
           }),
           API_KEY
         );
@@ -129,7 +147,8 @@ async function main() {
         result = await novadaResearch(
           validateResearchParams({
             question: positional,
-            depth: (flags.depth as "quick" | "deep") || "quick",
+            depth: (flags.depth as "quick" | "deep" | "auto" | "comprehensive") || "auto",
+            focus: flags.focus,
           }),
           API_KEY
         );

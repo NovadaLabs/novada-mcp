@@ -33,7 +33,7 @@ describe("novadaExtract", () => {
     mockedAxios.get.mockResolvedValue({ data: sampleHtml });
 
     const result = await novadaExtract({ url: "https://example.com", format: "markdown" }, API_KEY);
-    expect(result).toContain("# Test Page");
+    expect(result).toContain("title: Test Page");
     expect(result).toContain("A test page for extraction");
     expect(result).toContain("Main Content");
   });

@@ -7,6 +7,8 @@
 <p align="center">
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/novada.com-API_Key-ff6b35?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiLz48L3N2Zz4=" alt="novada.com"></a>
   <a href="https://www.npmjs.com/package/novada-mcp"><img src="https://img.shields.io/npm/v/novada-mcp?style=for-the-badge&label=MCP&color=blue" alt="npm version"></a>
+  <a href="https://lobehub.com/mcp/goldentrii-novada-mcp"><img src="https://img.shields.io/badge/LobeHub-MCP-purple?style=for-the-badge" alt="LobeHub MCP"></a>
+  <a href="https://smithery.ai/server/novada-mcp"><img src="https://img.shields.io/badge/Smithery-install-8B5CF6?style=for-the-badge" alt="Smithery"></a>
   <a href="#tools"><img src="https://img.shields.io/badge/tools-5-brightgreen?style=for-the-badge" alt="5 tools"></a>
   <a href="#novada_search"><img src="https://img.shields.io/badge/engines-5-orange?style=for-the-badge" alt="5 engines"></a>
   <a href="#nova--try-it-in-10-seconds"><img src="https://img.shields.io/badge/CLI-nova-blueviolet?style=for-the-badge" alt="CLI nova"></a>
@@ -132,6 +134,14 @@ claude mcp add novada -e NOVADA_API_KEY=your-key -- npx -y novada-mcp
 
 `--scope user` for all projects: `claude mcp add --scope user novada -e NOVADA_API_KEY=your-key -- npx -y novada-mcp`
 
+### Smithery (1 click)
+
+Install via [Smithery](https://smithery.ai/server/novada-mcp) — supports Claude Desktop, Cursor, VS Code, and more.
+
+```bash
+npx -y @smithery/cli install novada-mcp --client claude
+```
+
 <details>
 <summary><strong>Cursor / VS Code / Windsurf / Claude Desktop</strong></summary>
 
@@ -188,15 +198,21 @@ Search the web via Google, Bing, or 3 other engines. Returns structured results 
 | `num` | number | No | `10` | Results count (1-20) |
 | `country` | string | No | — | Country code (`us`, `uk`, `de`) |
 | `language` | string | No | — | Language code (`en`, `zh`, `de`) |
+| `time_range` | string | No | — | `day` `week` `month` `year` |
+| `start_date` | string | No | — | Start date `YYYY-MM-DD` |
+| `end_date` | string | No | — | End date `YYYY-MM-DD` |
+| `include_domains` | string[] | No | — | Only return results from these domains |
+| `exclude_domains` | string[] | No | — | Exclude results from these domains |
 
 ### `novada_extract`
 
-Extract the main content from any URL. Returns title, description, body text, and links.
+Extract the main content from any URL. Supports batch extraction of multiple URLs in parallel.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `url` | string | Yes | — | URL to extract |
+| `url` | string \| string[] | Yes | — | URL or array of URLs (max 10 for batch) |
 | `format` | string | No | `"markdown"` | `markdown` `text` `html` |
+| `query` | string | No | — | Query context hint for agent-side filtering |
 
 ### `novada_crawl`
 
@@ -207,6 +223,9 @@ Crawl a website and extract content from multiple pages concurrently.
 | `url` | string | Yes | — | Seed URL |
 | `max_pages` | number | No | `5` | Max pages (1-20) |
 | `strategy` | string | No | `"bfs"` | `bfs` (breadth-first) or `dfs` (depth-first) |
+| `select_paths` | string[] | No | — | Regex patterns — only crawl matching paths |
+| `exclude_paths` | string[] | No | — | Regex patterns — skip matching paths |
+| `instructions` | string | No | — | Natural-language hint for agent-side filtering |
 
 ### `novada_map`
 
@@ -217,16 +236,18 @@ Discover all URLs on a website. Fast — collects links without extracting conte
 | `url` | string | Yes | — | Root URL |
 | `search` | string | No | — | Filter URLs by search term |
 | `limit` | number | No | `50` | Max URLs (1-100) |
+| `max_depth` | number | No | `2` | BFS depth limit (1-5) |
 | `include_subdomains` | boolean | No | `false` | Include subdomain URLs |
 
 ### `novada_research`
 
-Multi-step web research. Runs 3-6 parallel searches, deduplicates, returns a cited report.
+Multi-step web research. Runs 3-10 parallel searches, deduplicates, returns a cited report.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `question` | string | Yes | — | Research question (min 5 chars) |
-| `depth` | string | No | `"quick"` | `quick` (3 searches) or `deep` (5-6) |
+| `depth` | string | No | `"auto"` | `auto` `quick` `deep` `comprehensive` |
+| `focus` | string | No | — | Narrow sub-query focus (e.g. `"production use cases"`) |
 
 ---
 
@@ -298,11 +319,11 @@ claude mcp add novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada-mcp
 
 | 工具 | 功能 | 参数 |
 |------|------|------|
-| `novada_search` | 通过 5 个搜索引擎搜索网络 | `query` (必填), `engine`, `num`, `country`, `language` |
-| `novada_extract` | 从任意 URL 提取主要内容 | `url` (必填), `format` |
-| `novada_crawl` | 爬取网站并发提取多页内容 | `url` (必填), `max_pages`, `strategy` |
-| `novada_map` | 发现网站所有 URL（不提取内容） | `url` (必填), `search`, `limit` |
-| `novada_research` | 多步骤研究，返回带引用的报告 | `question` (必填), `depth` |
+| `novada_search` | 通过 5 个搜索引擎搜索网络 | `query` (必填), `engine`, `num`, `country`, `language`, `time_range`, `include_domains`, `exclude_domains` |
+| `novada_extract` | 从一个或多个 URL 提取主要内容（支持批量） | `url` (必填，支持数组), `format`, `query` |
+| `novada_crawl` | 爬取网站并发提取多页内容 | `url` (必填), `max_pages`, `strategy`, `select_paths`, `exclude_paths`, `instructions` |
+| `novada_map` | 发现网站所有 URL（不提取内容） | `url` (必填), `search`, `limit`, `max_depth` |
+| `novada_research` | 多步骤研究，返回带引用的报告 | `question` (必填), `depth` (`auto`/`quick`/`deep`/`comprehensive`), `focus` |
 
 ### 用例
 

@@ -21,17 +21,42 @@ async function fetchPage(url: string, apiKey?: string): Promise<{ html: string; 
   }
 }
 
+/** Compile path filter regexes, ignore invalid patterns */
+function compilePatterns(patterns: string[] | undefined): RegExp[] {
+  if (!patterns?.length) return [];
+  return patterns.flatMap(p => {
+    try { return [new RegExp(p)]; }
+    catch { return []; }
+  });
+}
+
+/** Check if a URL path matches select/exclude path filters */
+function shouldCrawlUrl(
+  url: string,
+  selectPatterns: RegExp[],
+  excludePatterns: RegExp[]
+): boolean {
+  let path: string;
+  try { path = new URL(url).pathname; }
+  catch { return false; }
+
+  if (excludePatterns.some(re => re.test(path))) return false;
+  if (selectPatterns.length > 0 && !selectPatterns.some(re => re.test(path))) return false;
+  return true;
+}
+
 export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise<string> {
   const maxPages = Math.min(params.max_pages || 5, 20);
   const visited = new Set<string>();
-  const queue: { url: string; depth: number }[] = [
-    { url: params.url, depth: 0 },
-  ];
+  const queue: { url: string; depth: number }[] = [{ url: params.url, depth: 0 }];
   const results: CrawlResult[] = [];
   const baseHostname = new URL(params.url).hostname.replace(/^www\./, "");
+  let failedCount = 0;
+
+  const selectPatterns = compilePatterns(params.select_paths);
+  const excludePatterns = compilePatterns(params.exclude_paths);
 
   while (queue.length > 0 && results.length < maxPages) {
-    // Take up to CRAWL_CONCURRENCY items from queue
     const batch: { url: string; depth: number }[] = [];
     while (batch.length < CRAWL_CONCURRENCY && queue.length > 0 && results.length + batch.length < maxPages) {
       const item = params.strategy === "dfs" ? queue.pop()! : queue.shift()!;
@@ -43,12 +68,11 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
 
     if (batch.length === 0) break;
 
-    // Fetch pages concurrently
     const pages = await Promise.all(batch.map((item) => fetchPage(item.url, apiKey)));
 
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
-      if (!page) continue;
+      if (!page) { failedCount++; continue; }
 
       const title = extractTitle(page.html);
       const text = extractMainContent(page.html).slice(0, 3000);
@@ -58,18 +82,21 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
 
       results.push({ url: batch[i].url, title, text, depth: batch[i].depth, wordCount });
 
-      // Discover same-domain links using cheerio-based extraction
+      // Discover links, applying path filters before queuing
       const links = extractLinks(page.html, batch[i].url);
       for (const link of links) {
         try {
           const linkHostname = new URL(link).hostname.replace(/^www\./, "");
           const normalizedLink = normalizeUrl(link);
-          if (linkHostname === baseHostname && !visited.has(normalizedLink) && isContentLink(link)) {
+          if (
+            linkHostname === baseHostname &&
+            !visited.has(normalizedLink) &&
+            isContentLink(link) &&
+            shouldCrawlUrl(link, selectPatterns, excludePatterns)
+          ) {
             queue.push({ url: link, depth: batch[i].depth + 1 });
           }
-        } catch {
-          // Invalid URL, skip
-        }
+        } catch { /* invalid URL */ }
       }
     }
   }
@@ -83,16 +110,42 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
   const stopReason = stoppedEarly
     ? queue.length === 0
       ? "No more same-domain links to follow."
-      : "Remaining links were filtered (assets, auth pages, or already visited)."
+      : "Remaining links were filtered by path rules or already visited."
     : "";
 
-  return [
-    `# Crawl Results for ${params.url}`,
-    `\nPages crawled: ${results.length}/${maxPages} | Strategy: ${params.strategy || "bfs"} | Total words: ${totalWords}`,
-    stoppedEarly ? `\n*Stopped early: ${stopReason}*\n` : "\n",
-    ...results.map(
-      (r) =>
-        `## ${r.title}\n**URL:** ${r.url} | **Depth:** ${r.depth} | **Words:** ${r.wordCount}\n\n${r.text}\n`
-    ),
-  ].join("\n");
+  const instructionsNote = params.instructions
+    ? `\ninstructions: "${params.instructions}" (path filters applied; apply semantic filtering on your side)`
+    : "";
+
+  const lines: string[] = [
+    `## Crawl Results`,
+    `root: ${params.url}`,
+    `pages:${results.length} | strategy:${params.strategy || "bfs"} | total_words:${totalWords} | failed:${failedCount}${instructionsNote}`,
+    stoppedEarly && stopReason ? `note: Stopped early — ${stopReason}` : "",
+    ``,
+    `---`,
+    ``,
+  ].filter(l => l !== "");
+
+  results.forEach((r, idx) => {
+    lines.push(`### [${idx + 1}/${results.length}] ${r.url}`);
+    lines.push(`title: ${r.title}`);
+    lines.push(`depth:${r.depth} | words:${r.wordCount}`);
+    lines.push(``);
+    lines.push(r.text);
+    lines.push(``);
+    lines.push(`---`);
+    lines.push(``);
+  });
+
+  lines.push(`## Agent Hints`);
+  lines.push(`- ${results.length} pages crawled. For targeted extraction, use novada_map first then novada_extract on chosen pages.`);
+  if (selectPatterns.length > 0 || excludePatterns.length > 0) {
+    lines.push(`- Path filters were active. Remove them to crawl the full site.`);
+  }
+  if (params.instructions) {
+    lines.push(`- Instructions were noted. Apply semantic filtering to the content above based on: "${params.instructions}"`);
+  }
+
+  return lines.join("\n");
 }

@@ -131,7 +131,7 @@ describe("validateResearchParams", () => {
 
   it("applies default depth", () => {
     const result = validateResearchParams({ question: "What is MCP?" });
-    expect(result.depth).toBe("quick");
+    expect(result.depth).toBe("auto");
   });
 
   it("preserves depth field", () => {

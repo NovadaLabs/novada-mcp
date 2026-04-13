@@ -26,9 +26,9 @@ describe("novadaSearch", () => {
     });
 
     const result = await novadaSearch({ query: "test query", engine: "google", num: 10, country: "", language: "" }, API_KEY);
-    expect(result).toContain("**Result 1**");
+    expect(result).toContain("Result 1");
     expect(result).toContain("https://example.com/1");
-    expect(result).toContain("**Result 2**");
+    expect(result).toContain("Result 2");
     expect(mockedAxios.get).toHaveBeenCalledTimes(1);
   });
 
@@ -61,7 +61,7 @@ describe("novadaSearch", () => {
     });
 
     const result = await novadaSearch({ query: "test", engine: "google", num: 10, country: "", language: "" }, API_KEY);
-    expect(result).toContain("**Flat Result**");
+    expect(result).toContain("Flat Result");
     expect(result).toContain("https://flat.com");
     expect(result).toContain("A snippet");
   });

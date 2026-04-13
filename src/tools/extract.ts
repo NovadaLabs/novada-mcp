@@ -2,6 +2,55 @@ import { fetchViaProxy, extractMainContent, extractTitle, extractDescription, ex
 import type { ExtractParams } from "./types.js";
 
 export async function novadaExtract(params: ExtractParams, apiKey?: string): Promise<string> {
+  // Batch mode: array of URLs
+  if (Array.isArray(params.url)) {
+    const urls = params.url;
+    const results = await Promise.all(
+      urls.map((url, i) =>
+        extractSingle({ ...params, url }, apiKey)
+          .then(content => ({ i, url, content, ok: true }))
+          .catch(err => ({ i, url, content: `Error: ${err instanceof Error ? err.message : String(err)}`, ok: false }))
+      )
+    );
+
+    const successful = results.filter(r => r.ok).length;
+    const failed = results.length - successful;
+
+    const lines: string[] = [
+      `## Batch Extract Results`,
+      `urls:${urls.length} | successful:${successful} | failed:${failed}`,
+      ``,
+      `---`,
+      ``,
+    ];
+
+    for (const r of results) {
+      lines.push(`### [${r.i + 1}/${urls.length}] ${r.url}`);
+      if (!r.ok) lines.push(`status: FAILED`);
+      lines.push(``);
+      lines.push(r.content);
+      lines.push(``);
+      lines.push(`---`);
+      lines.push(``);
+    }
+
+    lines.push(`## Agent Hints`);
+    if (failed > 0) {
+      lines.push(`- ${failed} URL(s) failed. Check if they require JavaScript rendering.`);
+    }
+    lines.push(`- Use novada_map to discover additional pages on any of these domains.`);
+
+    return lines.join("\n");
+  }
+
+  // Single URL mode
+  return extractSingle(params as ExtractParams & { url: string }, apiKey);
+}
+
+async function extractSingle(
+  params: ExtractParams & { url: string },
+  apiKey?: string
+): Promise<string> {
   const response = await fetchViaProxy(params.url, apiKey);
   const html: string = response.data;
 
@@ -14,7 +63,6 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
 
   if (params.format === "html") {
     if (html.length <= 10000) return html;
-    // Truncate at a tag boundary to avoid invalid HTML
     const truncated = html.slice(0, 10000);
     const lastTagClose = truncated.lastIndexOf(">");
     return (lastTagClose > 9000 ? truncated.slice(0, lastTagClose + 1) : truncated) +
@@ -22,33 +70,67 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
   }
 
   const mainContent = extractMainContent(html);
-  const links = extractLinks(html, params.url);
 
-  // Plain text output
+  // Filter links: top 15 same-domain content links only (reduces token waste)
+  const allLinks = extractLinks(html, params.url);
+  let baseDomain: string;
+  try {
+    baseDomain = new URL(params.url).hostname.replace(/^www\./, "");
+  } catch {
+    baseDomain = "";
+  }
+  const sameDomainLinks = allLinks
+    .filter(link => {
+      try {
+        return new URL(link).hostname.replace(/^www\./, "") === baseDomain;
+      } catch { return false; }
+    })
+    .slice(0, 15);
+
   if (params.format === "text") {
     const plainContent = mainContent
       .replace(/^#{1,6}\s+/gm, "")
       .replace(/^\- /gm, "  * ")
       .replace(/\*\*([^*]+)\*\*/g, "$1");
-    const linksText = links.length > 0
-      ? `\nLinks:\n${links.map((l) => `  ${l}`).join("\n")}`
+    const linksText = sameDomainLinks.length > 0
+      ? `\nSame-domain links:\n${sameDomainLinks.map(l => `  ${l}`).join("\n")}`
       : "";
     return `${title}\n${description ? description + "\n" : ""}\n${plainContent}${linksText}`;
   }
 
   // Markdown output (default)
   const contentLen = mainContent.length;
-  const meta = `[Extracted: ${params.url} | Format: ${params.format || "markdown"} | Content: ${contentLen} chars | Links: ${links.length} | Via: Novada proxy]`;
+  const isTruncated = contentLen >= 8000;
 
-  return [
-    meta,
-    `\n# ${title}`,
-    description ? `\n> ${description}` : "",
-    `\n## Content\n\n${mainContent}`,
-    links.length > 0
-      ? `\n## Links (${links.length})\n\n${links.map((l) => `- ${l}`).join("\n")}`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const lines: string[] = [
+    `## Extracted Content`,
+    `url: ${params.url}`,
+    `title: ${title}`,
+    ...(description ? [`description: ${description}`] : []),
+    `format: ${params.format || "markdown"} | chars:${contentLen}${isTruncated ? " (may be truncated)" : ""} | links:${allLinks.length}`,
+    ``,
+    `---`,
+    ``,
+    mainContent,
+  ];
+
+  if (sameDomainLinks.length > 0) {
+    lines.push(``, `---`, `## Same-Domain Links (${sameDomainLinks.length} of ${allLinks.length})`);
+    for (const link of sameDomainLinks) {
+      lines.push(`- ${link}`);
+    }
+  }
+
+  lines.push(``, `---`, `## Agent Hints`);
+  if (isTruncated) {
+    lines.push(`- Content may be truncated. Use novada_map to find specific subpages.`);
+  }
+  try {
+    lines.push(`- To discover more pages: \`novada_map\` with url="${new URL(params.url).origin}"`);
+  } catch { /* ignore URL parse error */ }
+  if (params.query) {
+    lines.push(`- Query context: "${params.query}". Focus analysis on this topic.`);
+  }
+
+  return lines.join("\n");
 }

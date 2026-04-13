@@ -27,22 +27,46 @@ export const SearchParamsSchema = z.object({
   num: z.number().int().min(1).max(20).default(10),
   country: z.string().default(""),
   language: z.string().default(""),
+  time_range: z.enum(["day", "week", "month", "year"]).optional()
+    .describe("Limit results to a time window. 'day'=last 24h, 'week'=last 7 days, 'month'=last 30 days, 'year'=last 12 months."),
+  start_date: z.string().optional()
+    .describe("ISO date YYYY-MM-DD. Return results published on or after this date."),
+  end_date: z.string().optional()
+    .describe("ISO date YYYY-MM-DD. Return results published on or before this date."),
+  include_domains: z.array(z.string()).optional()
+    .describe("Only return results from these domains. E.g. ['github.com', 'arxiv.org']. Max 10."),
+  exclude_domains: z.array(z.string()).optional()
+    .describe("Exclude results from these domains. E.g. ['reddit.com', 'quora.com']. Max 10."),
 });
 
 export const ExtractParamsSchema = z.object({
-  url: safeUrl,
+  url: z.union([
+    safeUrl,
+    z.array(safeUrl).min(1).max(10),
+  ]).describe("URL or array of URLs (max 10) to extract. Batch mode processes in parallel."),
   format: z.enum(["text", "markdown", "html"]).default("markdown"),
+  query: z.string().optional()
+    .describe("Optional query for relevance context. Helps the calling agent focus on relevant sections."),
 });
 
 export const CrawlParamsSchema = z.object({
   url: safeUrl,
   max_pages: z.number().int().min(1).max(20).default(5),
   strategy: z.enum(["bfs", "dfs"]).default("bfs"),
+  instructions: z.string().optional()
+    .describe("Natural language hint for which pages to prioritize. E.g. 'only API reference pages', 'skip blog and changelog'. Applied as path-level filtering; semantic filtering is agent-side."),
+  select_paths: z.array(z.string()).optional()
+    .describe("Regex patterns to restrict crawled URL paths. E.g. ['/docs/.*', '/api/.*']."),
+  exclude_paths: z.array(z.string()).optional()
+    .describe("Regex patterns for URL paths to skip entirely. E.g. ['/blog/.*', '/changelog/.*']."),
 });
 
 export const ResearchParamsSchema = z.object({
   question: z.string().min(5, "Research question must be at least 5 characters"),
-  depth: z.enum(["quick", "deep"]).default("quick"),
+  depth: z.enum(["quick", "deep", "auto", "comprehensive"]).default("auto")
+    .describe("'quick'=3 searches, 'deep'=5-6, 'comprehensive'=8-10, 'auto'=server decides based on question complexity."),
+  focus: z.string().optional()
+    .describe("Optional focus area to guide sub-query generation. E.g. 'technical implementation', 'business impact', 'recent news only'."),
 });
 
 export const MapParamsSchema = z.object({
@@ -50,6 +74,8 @@ export const MapParamsSchema = z.object({
   search: z.string().optional(),
   limit: z.number().int().min(1).max(100).default(50),
   include_subdomains: z.boolean().default(false),
+  max_depth: z.number().int().min(1).max(5).default(2)
+    .describe("Link-hops from root to follow. Default 2. Higher = more pages found but slower."),
 });
 
 // ─── Inferred Types ─────────────────────────────────────────────────────────
@@ -90,6 +116,8 @@ export interface NovadaSearchResult {
   link?: string;
   description?: string;
   snippet?: string;
+  published?: string;
+  date?: string;
 }
 
 export interface NovadaApiResponse {

@@ -6,27 +6,27 @@
     "url": "https://github.com/Goldentrii/novada-mcp",
     "source": "github"
   },
-  "version": "0.6.0",
+  "version": "2.0.0",
   "tools": [
     {
       "name": "novada_search",
-      "description": "Search the web via Google, Bing, DuckDuckGo, Yahoo, or Yandex with structured results"
+      "description": "Search the web via Google, Bing, DuckDuckGo, Yahoo, or Yandex. Returns structured results with titles, URLs, snippets. Supports time range, date filters, domain include/exclude, and geo-targeting across 195 countries."
     },
     {
       "name": "novada_extract",
-      "description": "Extract main content, title, description, and links from any URL"
+      "description": "Extract main content, title, description, and same-domain links from one or multiple URLs (batch mode). Supports markdown, text, and HTML output. Pass url=[url1,url2] for parallel batch extraction."
     },
     {
       "name": "novada_crawl",
-      "description": "Crawl a website (BFS/DFS) and extract content from multiple pages"
+      "description": "Crawl a website using BFS or DFS, extract content from multiple pages concurrently. Supports select_paths and exclude_paths regex filters, plus natural-language instructions for agent-side semantic filtering."
     },
     {
       "name": "novada_map",
-      "description": "Discover all URLs on a website without extracting content"
+      "description": "Discover all URLs on a website without extracting content. BFS link collection with path-diverse queuing, max_depth control, and optional keyword filtering. Detects JavaScript SPAs automatically."
     },
     {
       "name": "novada_research",
-      "description": "Multi-step web research with parallel queries, deduplication, and citations"
+      "description": "Multi-step research: generates 3-10 parallel search queries, deduplicates up to 15 unique sources, returns cited report. depth=auto|quick|deep|comprehensive. Optional focus param narrows sub-query generation."
     }
   ],
   "categories": ["web-search", "web-scraping", "research", "data-extraction"],
@@ -35,7 +35,7 @@
     {
       "registryType": "npm",
       "identifier": "novada-mcp",
-      "version": "0.6.0",
+      "version": "2.0.0",
       "transport": {
         "type": "stdio"
       },

@@ -5,7 +5,6 @@ import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./type
 export async function novadaSearch(params: SearchParams, apiKey: string): Promise<string> {
   const engine = params.engine || "google";
 
-  // Build params, then clean empty values before sending
   const rawParams: Record<string, string> = {
     q: params.query,
     api_key: apiKey,
@@ -22,7 +21,19 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     rawParams.mkt = `${rawParams.language}-${rawParams.country.toUpperCase()}`;
   }
 
-  // Remove empty strings — don't send blank country/language to API
+  // Time filtering
+  if (params.time_range) rawParams.time_range = params.time_range;
+  if (params.start_date) rawParams.start_date = params.start_date;
+  if (params.end_date) rawParams.end_date = params.end_date;
+
+  // Domain filtering
+  if (params.include_domains?.length) {
+    rawParams.include_domains = params.include_domains.slice(0, 10).join(",");
+  }
+  if (params.exclude_domains?.length) {
+    rawParams.exclude_domains = params.exclude_domains.slice(0, 10).join(",");
+  }
+
   const cleaned = cleanParams(rawParams) as Record<string, string>;
   const searchParams = new URLSearchParams(cleaned);
 
@@ -40,9 +51,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   const data: NovadaApiResponse = response.data;
 
   if (data.code && data.code !== 200 && data.code !== 0) {
-    throw new Error(
-      `Novada API error (code ${data.code}): ${data.msg || "Unknown error"}`
-    );
+    throw new Error(`Novada API error (code ${data.code}): ${data.msg || "Unknown error"}`);
   }
 
   const results: NovadaSearchResult[] = data.data?.organic_results || data.organic_results || [];
@@ -50,23 +59,57 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     return "No results found for this query.";
   }
 
-  // Structured metadata header for agent decision-making
-  const meta = `[Results: ${results.length} | Engine: ${engine}${params.country ? ` | Country: ${params.country}` : ""} | Via: Novada proxy]`;
+  // Active filters summary for agent metadata
+  const activeFilters: string[] = [];
+  if (params.country) activeFilters.push(`country:${params.country}`);
+  if (params.time_range) activeFilters.push(`time:${params.time_range}`);
+  if (params.start_date || params.end_date) {
+    activeFilters.push(`dates:${params.start_date || "*"}→${params.end_date || "*"}`);
+  }
+  if (params.include_domains?.length) activeFilters.push(`only:${params.include_domains.join(",")}`);
+  if (params.exclude_domains?.length) activeFilters.push(`exclude:${params.exclude_domains.join(",")}`);
 
-  const formatted = results
-    .map((r: NovadaSearchResult, i: number) => {
-      let url: string = r.url || r.link || "N/A";
-      url = unwrapBingUrl(url);
-      return `${i + 1}. **${r.title || "Untitled"}**\n   URL: ${url}\n   ${r.description || r.snippet || "No description"}`;
-    })
-    .join("\n\n");
+  const filterStr = activeFilters.length ? ` | ${activeFilters.join(" | ")}` : "";
 
-  return `${meta}\n\n${formatted}`;
+  const lines: string[] = [
+    `## Search Results`,
+    `results:${results.length} | engine:${engine}${filterStr}`,
+    ``,
+    `---`,
+    ``,
+  ];
+
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    let url = r.url || r.link || "N/A";
+    url = unwrapBingUrl(url);
+
+    // Strip pagination UI text from snippets
+    const rawSnippet = r.description || r.snippet || "";
+    const cleanSnippet = rawSnippet
+      .replace(/\.{3}\s*Read\s+more\s*$/i, "...")
+      .replace(/\s+Read\s+more\s*$/i, "")
+      .replace(/\s+More\s*$/i, "")
+      .trim() || "No description";
+
+    lines.push(`### ${i + 1}. ${r.title || "Untitled"}`);
+    lines.push(`url: ${url}`);
+    lines.push(`snippet: ${cleanSnippet}`);
+    if (r.published || r.date) lines.push(`published: ${r.published || r.date}`);
+    lines.push("");
+  }
+
+  lines.push(`---`);
+  lines.push(`## Agent Hints`);
+  lines.push(`- To read any result in full: \`novada_extract\` with its url`);
+  lines.push(`- To batch-read multiple results: \`novada_extract\` with \`url=[url1, url2, ...]\``);
+  lines.push(`- For deeper multi-source research: \`novada_research\``);
+
+  return lines.join("\n");
 }
 
 /** Unwrap Bing redirect/base64 encoded URLs */
 function unwrapBingUrl(url: string): string {
-  // Bing redirect wrapper
   if (url.includes("bing.com/ck/a") || url.includes("r.bing.com")) {
     try {
       const u = new URL(url);
@@ -81,7 +124,6 @@ function unwrapBingUrl(url: string): string {
       }
     } catch { /* keep original */ }
   }
-  // Raw base64-encoded URL
   if (!url.startsWith("http") && /^[A-Za-z0-9+/=]+$/.test(url) && url.length > 20) {
     try {
       const decoded = Buffer.from(url, "base64").toString("utf8");

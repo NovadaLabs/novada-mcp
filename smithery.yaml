@@ -1,5 +1,5 @@
 name: novada-mcp
-description: "Real-time web data API for AI agents — search (Google, Bing), extract, crawl, and research the web. Powered by 100M+ proxy IPs across 195 countries."
+description: "Real-time web data API for AI agents — search (Google, Bing, DuckDuckGo, Yahoo, Yandex), extract, crawl, map, and research the web. Powered by 100M+ proxy IPs across 195 countries with anti-bot bypass."
 startCommand:
   type: stdio
   configSchema:
@@ -12,3 +12,14 @@ startCommand:
       - novadaApiKey
   commandFunction: |
     config => ({ command: 'npx', args: ['-y', 'novada-mcp@latest'], env: { NOVADA_API_KEY: config.novadaApiKey } })
+tools:
+  - name: novada_search
+    description: "Search the web via Google, Bing, DuckDuckGo, Yahoo, or Yandex. Returns structured results with titles, URLs, snippets, and optional date filtering."
+  - name: novada_extract
+    description: "Extract main content, title, description, and links from one or multiple URLs. Supports markdown, text, and HTML output formats."
+  - name: novada_crawl
+    description: "Crawl a website using BFS or DFS and extract content from multiple pages concurrently. Supports path filtering and natural-language instructions."
+  - name: novada_map
+    description: "Discover all URLs on a website without extracting content. BFS link collection with path-diverse queuing and optional keyword filtering."
+  - name: novada_research
+    description: "Multi-step research: runs 3-10 parallel searches, deduplicates sources, returns a cited report with agent hints for follow-up extraction."

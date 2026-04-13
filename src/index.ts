@@ -5,6 +5,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import {
   novadaSearch,
@@ -20,7 +24,6 @@ import {
   classifyError,
 } from "./tools/index.js";
 import { ZodError } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
 import {
   SearchParamsSchema,
   ExtractParamsSchema,
@@ -32,154 +35,74 @@ import {
 // ─── Configuration ───────────────────────────────────────────────────────────
 
 import { VERSION } from "./config.js";
+import { listPrompts, getPrompt } from "./prompts/index.js";
+import { listResources, readResource } from "./resources/index.js";
 
 const API_KEY = process.env.NOVADA_API_KEY;
 
-/** Convert a Zod schema to MCP-compatible JSON Schema (strips $schema wrapper) */
+/** Convert a Zod v4 schema to MCP-compatible JSON Schema.
+ * Uses Zod's native .toJSONSchema() — zod-to-json-schema v3 does not support Zod v4.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function zodToMcpSchema(schema: any): Record<string, unknown> {
-  const jsonSchema = zodToJsonSchema(schema, { target: "openApi3" });
-  // Remove $schema key that MCP doesn't need
-  const { $schema, ...rest } = jsonSchema as Record<string, unknown>;
+  const jsonSchema = schema.toJSONSchema();
+  // Strip meta-schema declarations that MCP clients don't need
+  const { $schema, $defs, ...rest } = jsonSchema as Record<string, unknown>;
   return rest;
 }
 
 // ─── Tool Definitions ────────────────────────────────────────────────────────
-// Descriptions follow the Firecrawl pattern:
-//   Best for → Not recommended for → Common mistakes → Usage Example → Returns
 
 const TOOLS = [
   {
     name: "novada_search",
-    description: `Search the web via Google, Bing, or 3 other engines. Returns structured results with titles, URLs, and snippets. Routed through proxy infrastructure for anti-bot bypass.
+    description: `Search the web via 5 engines (Google, Bing, DuckDuckGo, Yahoo, Yandex) with 195-country geo-targeting and anti-bot proxy bypass. Returns titles, URLs, and snippets.
 
-**Best for:** Factual queries, news, current events, finding specific pages. Google recommended for best relevance. Supports geo-targeted results from 195 countries.
-**Not recommended for:** Complex questions needing multiple perspectives (use novada_research), reading a specific URL's content (use novada_extract), or discovering all pages on a site (use novada_map).
-**Common mistakes:** Using search when you already have the URL (use extract instead), not specifying country/language for localized results.
-
-**Usage Example:**
-\`\`\`json
-{
-  "name": "novada_search",
-  "arguments": {
-    "query": "best AI agent frameworks 2025",
-    "engine": "google",
-    "num": 10,
-    "country": "us"
-  }
-}
-\`\`\`
-**Returns:** Numbered list of results with title, URL, and description snippet.`,
+**Best for:** Current facts, news, finding specific pages. Add time_range for recent results. Add include_domains to restrict to trusted sources.
+**Not for:** Reading a URL (use novada_extract), multi-source research (use novada_research), site URL discovery (use novada_map).
+**Tip:** Use novada_extract with the returned URLs to read full content.`,
     inputSchema: zodToMcpSchema(SearchParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
   },
   {
     name: "novada_extract",
-    description: `Extract the main content from any URL. Returns page title, description, body text (markdown/text/html), and discovered links. Routed through proxy infrastructure for anti-bot bypass.
+    description: `Extract main content from any URL or batch of URLs (max 10). Returns title, description, body text, and same-domain links. Proxy-routed for anti-bot bypass.
 
-**Best for:** Reading a specific page's content, extracting article text, getting page metadata. Works with most server-rendered pages.
-**Not recommended for:** JavaScript-heavy SPAs where content is rendered client-side only, discovering URLs on a site (use novada_map first), or getting structured data in a specific schema.
-**Common mistakes:** Trying to extract content from a URL that requires JavaScript rendering (results will be incomplete).
-
-**Usage Example (markdown — default, best for reading):**
-\`\`\`json
-{
-  "name": "novada_extract",
-  "arguments": {
-    "url": "https://example.com/blog/article",
-    "format": "markdown"
-  }
-}
-\`\`\`
-**Usage Example (html — for raw structure):**
-\`\`\`json
-{
-  "name": "novada_extract",
-  "arguments": {
-    "url": "https://example.com",
-    "format": "html"
-  }
-}
-\`\`\`
-**Returns:** Page title, meta description, main content (in chosen format), and up to 50 links found on the page.`,
+**Best for:** Reading specific pages. Pass url as an array to batch-extract multiple pages in one call (e.g. after novada_search).
+**Not for:** JavaScript SPAs (content won't render), site URL discovery (use novada_map).
+**Tip:** If content is incomplete, run novada_map first to find the correct subpage URL.`,
     inputSchema: zodToMcpSchema(ExtractParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
   },
   {
     name: "novada_crawl",
-    description: `Crawl a website starting from a seed URL. Extracts content from multiple same-domain pages concurrently (up to 3 at a time). Returns title and body text for each page.
+    description: `Crawl a website and extract content from multiple pages (BFS or DFS, up to 20 pages). Use select_paths or exclude_paths regex to target specific sections. Use instructions for natural language page guidance.
 
-**Best for:** Extracting content from multiple related pages, building a local knowledge base, competitive analysis.
-**Not recommended for:** Single page extraction (use novada_extract), discovering URLs without content (use novada_map — faster), or when token limits are a concern (limit max_pages).
-**Common mistakes:** Setting max_pages too high (causes large responses), using crawl to discover URLs (use novada_map first, then extract specific pages).
-
-**Optimal workflow:** Use novada_map to discover URLs → pick the relevant ones → use novada_extract on each.
-
-**Usage Example:**
-\`\`\`json
-{
-  "name": "novada_crawl",
-  "arguments": {
-    "url": "https://docs.example.com",
-    "max_pages": 10,
-    "strategy": "bfs"
-  }
-}
-\`\`\`
-**Returns:** Crawl report with page count, total words, and extracted content from each page.`,
+**Best for:** Extracting content from a doc site, competitive analysis, building knowledge bases.
+**Not for:** Single pages (use novada_extract), URL discovery without content (use novada_map — faster).
+**Tip:** novada_map → pick relevant URLs → novada_extract is more token-efficient than crawl for selective extraction.`,
     inputSchema: zodToMcpSchema(CrawlParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: false, openWorldHint: true },
   },
   {
     name: "novada_research",
-    description: `Multi-angle web research. Generates 3-6 diverse search queries, executes them in parallel, deduplicates sources, and returns a structured report with citations.
+    description: `Multi-step web research: generates 3-10 diverse search queries in parallel, deduplicates sources, returns a cited report. Use depth='auto' (default) to let the server choose based on question complexity.
 
-**Best for:** Complex questions needing multiple perspectives, competitive analysis, topic overviews, literature surveys. One tool call replaces 3-6 manual searches.
-**Not recommended for:** Simple factual lookups (use novada_search), reading a specific URL (use novada_extract).
-**Common mistakes:** Using 'deep' mode for simple questions (wastes API calls), not following up with novada_extract on the most relevant sources.
-
-**Usage Example:**
-\`\`\`json
-{
-  "name": "novada_research",
-  "arguments": {
-    "question": "How do AI agents use web scraping APIs in production?",
-    "depth": "deep"
-  }
-}
-\`\`\`
-**Returns:** Research report with search queries used, key findings with URLs and snippets, and a deduplicated source list. Follow up with novada_extract on specific sources for deeper analysis.`,
+**Best for:** Complex questions needing multiple perspectives, competitive analysis, topic overviews. One call replaces 3-10 manual searches.
+**Not for:** Simple lookups (use novada_search), reading a specific URL (use novada_extract).
+**Tip:** Follow up with novada_extract on the most relevant source URLs for full content.`,
     inputSchema: zodToMcpSchema(ResearchParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
   },
   {
     name: "novada_map",
-    description: `Discover all URLs on a website. Fast BFS crawl that collects links without extracting content — much faster than crawl for URL discovery.
+    description: `Discover all URLs on a website without extracting content — much faster than crawl for URL discovery. Use search param to filter by keyword. Use max_depth to control traversal depth.
 
-**Best for:** Discovering what pages exist on a site before deciding what to scrape, finding specific sections within a large site, locating the correct page when extract returns incomplete results.
-**Not recommended for:** When you already know the URL (use novada_extract), when you need page content (use novada_extract or novada_crawl after mapping).
-**Common mistakes:** Using novada_crawl to discover URLs (map is much faster since it doesn't extract content).
-
-**IMPORTANT:** If novada_extract returns incomplete content, use novada_map with the 'search' parameter to find the specific page URL containing your target content. This is faster than crawling.
-
-**Usage Example (discover all URLs):**
-\`\`\`json
-{
-  "name": "novada_map",
-  "arguments": {
-    "url": "https://docs.example.com"
-  }
-}
-\`\`\`
-**Usage Example (search for specific content):**
-\`\`\`json
-{
-  "name": "novada_map",
-  "arguments": {
-    "url": "https://docs.example.com",
-    "search": "webhook",
-    "limit": 20
-  }
-}
-\`\`\`
-**Returns:** Numbered list of discovered URLs, optionally filtered by search term.`,
+**Best for:** Understanding site structure, finding specific subpages before extracting, recovering when novada_extract returns incomplete content.
+**Not for:** When you already have the URL (use novada_extract directly).
+**Warning:** Returns limited results on JavaScript SPAs — will include a hint if this is detected.`,
     inputSchema: zodToMcpSchema(MapParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
   },
 ];
 
@@ -191,7 +114,7 @@ class NovadaMCPServer {
   constructor() {
     this.server = new Server(
       { name: "novada-mcp", version: VERSION },
-      { capabilities: { tools: {} } }
+      { capabilities: { tools: {}, prompts: {}, resources: {} } }
     );
     this.setupHandlers();
     this.setupErrorHandling();
@@ -212,6 +135,23 @@ class NovadaMCPServer {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: TOOLS,
     }));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.server.setRequestHandler(ListPromptsRequestSchema, async () => listPrompts() as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+      const { name, arguments: args } = request.params;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return getPrompt(name, (args as Record<string, string>) || {}) as any;
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.server.setRequestHandler(ListResourcesRequestSchema, async () => listResources() as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return readResource(request.params.uri) as any;
+    });
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
