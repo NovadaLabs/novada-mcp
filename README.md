@@ -23,9 +23,6 @@
   <a href="https://github.com/Goldentrii/novada-mcp"><img src="https://img.shields.io/github/stars/Goldentrii/novada-mcp?style=social" alt="stars"></a>
 </p>
 
-<p align="center">
-  <a href="https://lobehub.com/mcp/goldentrii-novada-mcp"><img src="https://lobehub.com/badge/mcp-full/goldentrii-novada-mcp?theme=light" alt="MCP Badge"></a>
-</p>
 
 ---
 
