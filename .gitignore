@@ -4,3 +4,4 @@ build/
 .env.local
 *.tgz
 .DS_Store
+.worktrees/
