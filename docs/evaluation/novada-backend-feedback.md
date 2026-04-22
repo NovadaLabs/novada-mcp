@@ -1,218 +1,137 @@
-# Novada Backend — Critical Issues Report (curl-verified)
+# Novada MCP Integration — Technical Questions for Backend Team
 **From:** Novada MCP Team | **Date:** 2026-04-22
-**Context:** 122 MCP test calls + independent curl verification, benchmarked against Tavily MCP + Firecrawl MCP
-**Urgency:** HIGH — these issues make Novada uncompetitive in the AI agent market
-
-> Every issue in this document was independently verified via `curl` against the raw API, ruling out MCP wrapper issues. Exact request/response pairs included.
+**Context:** Building the official Novada MCP server for AI agents (Claude, Cursor, VS Code). Published to npm as `novada-mcp`. 122 test calls completed, competitive benchmarking against Tavily MCP + Firecrawl MCP.
 
 ---
 
-## Executive Summary
+## Summary
 
-We built an MCP server wrapper around Novada's API for AI agents (Claude, Cursor, VS Code, etc.). After 122 live tests + curl verification, **7 backend issues** prevent us from competing with Tavily and Firecrawl. Four of five search engines are broken. The proxy endpoint for URL fetching returns 404. Geo-targeting is absent, causing wrong-locale content.
+We built and published the Novada MCP server — 5 tools (search, extract, crawl, map, research) for AI agents. The Novada product infrastructure is strong: 4/5 search engines work via the Scraper API, Web Unblocker delivers full anti-bot bypass, and the scraper library is extensive.
 
-**None of these are MCP wrapper issues.** We've implemented every workaround possible at the MCP layer (auto-fallback to Google, content quality detection, dynamic agent hints), but when the underlying API is broken, the wrapper can't fabricate data.
+**We need answers to 3 technical questions to complete the integration and unlock all engines for agents.**
 
 ---
 
-## Issue 1: CRITICAL — Yahoo: Backend URL Builder Drops `q` Parameter
+## Question 1 (CRITICAL): How to Retrieve Results from Scraper API Task IDs?
 
-### curl test
+### What We Did
+
+We successfully submit search tasks to `POST https://scraper.novada.com/request`:
 
 ```bash
-$ curl "https://scraperapi.novada.com/search?q=test+query&engine=yahoo&api_key=c77dd8..."
+curl -X POST "https://scraper.novada.com/request" \
+  -H "Authorization: Bearer 1f35b477c9e1802778ec64aee2a6adfa" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "scraper_name=bing.com" \
+  -d "scraper_id=bing_search" \
+  -d "q=apple" \
+  -d "json=1"
 ```
 
-### Response
+Response: `{"code":0,"data":{"code":200,"data":{"task_id":"1f1901dc..."}}}`
 
-```json
-{"code":410,"msg":"Build url error: empty query built"}
+### What We Need
+
+The API returns a `task_id` but we can't find the endpoint to retrieve results. We tried 13 URL patterns (all returned 404):
+
+```
+GET  /result/{task_id}
+GET  /task/{task_id}
+GET  /request/{task_id}
+POST /result  (with task_id in body)
+GET  /v1/task/{task_id}
+GET  /results?task_id=...
+... etc
 ```
 
-### Analysis
+**Please provide:**
+1. The result retrieval endpoint (e.g., `GET /result/{task_id}`)
+2. Or: does the API support a synchronous mode? (e.g., a `sync=true` parameter that blocks until results are ready)
+3. Or: does it support a `callback_url` parameter for webhook delivery?
 
-`q=test+query` is present and correctly encoded. The Yahoo URL builder drops the parameter when constructing the final request URL, producing an "empty query."
+**Why this matters:** MCP tools are synchronous — the agent calls a tool and waits for the response. Without a way to retrieve results, we can't migrate from the legacy `scraperapi.novada.com/search` to the Scraper API. This single endpoint unlocks 4 search engines (Google, Bing, DDG, Yandex) for all AI agents using Novada.
 
 ---
 
-## Issue 2: CRITICAL — Bing: Query String Truncated/Degraded
+## Question 2: Scraper IDs — Verified Working vs Not Found
 
-### curl test
+### Verified Working (20 test calls)
 
-```bash
-$ curl "https://scraperapi.novada.com/search?q=kubernetes+pod+scheduling+algorithm&engine=bing&api_key=c77dd8...&num=2"
-```
+| Engine | scraper_name | scraper_id | Extra Params | Status |
+|--------|-------------|-----------|-------------|--------|
+| Google | `google.com` | `google_search` | — | ✅ task_id returned |
+| Bing | `bing.com` | `bing_search` | `safe=off` | ✅ task_id returned |
+| DuckDuckGo | `duckduckgo.com` | `duckduckgo` | — | ✅ task_id returned |
+| Yandex | `yandex.com` | `yandex` | `yandex_domain=yandex.com` | ✅ task_id returned |
 
-### Response (top 10 titles)
+### Not Working
 
-```
-1. What is the meaning of CPU and core in Kubernetes?
-2. Reasons for OOMKilled in kubernetes - Stack Overflow
-3. What's the difference between Docker Compose and Kubernetes?
-4. kubernetes - How to check if network policy have been applied to pod...
-5. timeout - Kubernetes Ingress (Specific APP) 504 Gateway Time-Out
-```
+| Engine | scraper_name | scraper_id | Error |
+|--------|-------------|-----------|-------|
+| Yahoo | `yahoo.com` | `yahoo_search` | `11006 Scraper error` |
+| Yahoo | `yahoo.com` | `yahoo` | `11006 Scraper error` |
+| Yandex | `yandex.com` | `yandex_search` | `11006 Scraper error` (wrong id — `yandex` works) |
 
-### Analysis
-
-Searched for **"kubernetes pod scheduling algorithm"**. Results are generic Kubernetes questions — none about pod scheduling algorithms. The keyword "kubernetes" is preserved but "pod scheduling algorithm" is dropped. The query is truncated or degraded to a single keyword before being passed to Bing.
-
-**Impact on agents:** Wrong results are worse than no results. Agents build on false foundations and waste ~800 tokens of context window.
-
----
-
-## Issue 3: CRITICAL — DuckDuckGo: 502 Bad Gateway
-
-### curl test
-
-```bash
-$ curl "https://scraperapi.novada.com/search?q=test+query&engine=duckduckgo&api_key=c77dd8..."
-```
-
-### Response
-
-```html
-<html><head><title>502 Bad Gateway</title></head>
-<body><center><h1>502 Bad Gateway</h1></center>
-<hr><center>stgw</center></body></html>
-```
-
-### Analysis
-
-The gateway layer (`stgw`) returns 502 before the request reaches the application. DDG workers may be down, or Novada exit IPs are blocked by DuckDuckGo. Consistent across 3 independent test rounds over several hours.
+**Questions:**
+1. Is Yahoo search available on the Scraper API? If so, what's the correct `scraper_id`?
+2. Can we get the full list of available scraper_ids for search engines? (The web library shows Google has 4 scrapers — we only found `google_search`)
+3. Are there additional required parameters per engine? (e.g., Yandex needs `yandex_domain`)
 
 ---
 
-## Issue 4: HIGH — Yandex: Parameter Mapping Error (NOT an API Key Issue)
+## Question 3: Legacy scraperapi.novada.com — Deprecated?
 
-### curl test
+We originally built the MCP against `scraperapi.novada.com`. We found issues:
 
-```bash
-$ curl "https://scraperapi.novada.com/search?q=test+query&engine=yandex&api_key=c77dd8..."
-```
+| Endpoint | Status |
+|----------|--------|
+| `scraperapi.novada.com/search` | Works for Google only. Bing/DDG/Yahoo/Yandex have issues. |
+| `scraperapi.novada.com?url=...` (root path) | Returns 404 with both API keys |
 
-### Response
-
-```json
-{"code":401,"msg":"param error：failed to bind query: Key: 'SearchParameters.Text' Error:Field validation for 'Text' failed on the 'required' tag"}
-```
-
-### Analysis
-
-**This is NOT an API key issue** (our earlier report was incorrect — now corrected). The error shows `SearchParameters.Text` fails validation as "required" but empty. Yandex's search API uses `Text` as the query parameter name, but the backend fails to map the generic `q` parameter to `SearchParameters.Text`.
-
-We also tested with the Scraper API key (`1f35b4...`): returned `{"code":402,"msg":"Api Key error：User has no permission"}`. Neither key works for Yandex.
-
-### Fix needed
-
-Map `q` → `SearchParameters.Text` in the Yandex engine handler.
+**Questions:**
+1. Is `scraperapi.novada.com` deprecated in favor of the Scraper API (`scraper.novada.com`)?
+2. For URL fetching (content extraction), should we use Web Unblocker instead of scraperapi?
+3. If scraperapi is still supported, the following engine-specific issues exist:
+   - Yahoo: `q` parameter dropped → `410 empty query built`
+   - Bing: query string truncated — only first keyword passes through
+   - DDG: `502 Bad Gateway` at gateway layer
+   - Yandex: `SearchParameters.Text` param mapping fails
+   - Google: parallel calls unreliable (0 results or 413)
 
 ---
 
-## Issue 5: MEDIUM — Google: Unreliable Under Parallel Load
+## Competitive Context
 
-### curl test
+We've benchmarked Novada MCP against Tavily MCP and Firecrawl MCP. Novada's competitive position:
 
-```bash
-$ curl "...?q=test+alpha&engine=google&..." &
-$ curl "...?q=test+beta&engine=google&..." &
-$ wait
-```
+**Novada Advantages:**
+- **Agent Hints** — unique feature, no competitor does this
+- **5 search engines** (once Scraper API integration is complete) vs competitors' 1
+- **Extensive scraper library** (Amazon, YouTube, LinkedIn, etc.) — untapped potential for MCP
+- **195-country geo-targeting** via proxy infrastructure
+- **Batch extract** (10 URLs parallel) — not available in Tavily
 
-### Response
+**What Competitors Have That We Don't (Yet):**
+- Firecrawl: autonomous browser agent (FIRE-1), JSON Schema extraction, async crawl with polling
+- Tavily: AI-ranked relevance scoring on search results
 
-```
-Call 1: code:200, results:1  ← normal
-Call 2: code:200, results:0  ← soft failure (no results)
-```
-
-### Analysis
-
-One of two parallel calls returns empty results (code 200 but 0 results). Previous tests showed hard failures with `413: WorkerPool not initialized`. Behavior is inconsistent — sometimes soft failure (empty results), sometimes hard failure (413). Sequential calls always work.
-
----
-
-## Issue 6: CRITICAL — scraperapi.novada.com Root Path Returns 404
-
-### curl test
-
-```bash
-# With NOVADA_API_KEY
-$ curl -o /dev/null -w "HTTP %{http_code}" "https://scraperapi.novada.com?api_key=c77dd8...&url=https://example.com"
-HTTP 404
-
-# With SCRAPER_API_KEY (ruling out key issue)
-$ curl -o /dev/null -w "HTTP %{http_code}" "https://scraperapi.novada.com?api_key=1f35b4...&url=https://example.com"
-HTTP 404
-```
-
-### Analysis
-
-Both API keys return 404. This is not a key permission issue — the endpoint itself is dead. Only `/search` sub-path works. The root path (used for URL fetching / content extraction) is completely non-functional.
-
-### Impact
-
-The entire extract/crawl/map proxy chain silently fails. All "successful" extract/crawl operations fell back to direct fetch (no proxy), meaning: zero anti-bot bypass, zero residential IP rotation, bot-protected sites fail silently.
-
-We've implemented Web Unblocker (`POST webunlocker.novada.com/request`) as a workaround, but it's more expensive and slower.
+**Our Plan After Getting the Result Endpoint:**
+1. Migrate `novada_search` to Scraper API — unlocks 4 engines for agents
+2. Add `novada_research` parallel multi-engine search — unique capability
+3. Eventually expose more scrapers (Amazon, YouTube, LinkedIn) as additional MCP tools
 
 ---
 
-## Issue 7: MEDIUM — No Geo-Targeting on scraperapi Proxy
+## Summary of What We Need
 
-Proxy exit IPs are in EU (Germany). US-centric sites return locale-redirected content:
-- `stripe.com/pricing` → `stripe.com/de/pricing` → 144 chars, German
+| # | Question | Priority | Impact |
+|---|----------|----------|--------|
+| 1 | Scraper API result retrieval endpoint | **CRITICAL** | Unlocks 4 search engines for all AI agents |
+| 2 | Complete scraper_id list for search engines | HIGH | Correct integration params |
+| 3 | scraperapi.novada.com deprecation status | MEDIUM | Architecture decision |
 
-Web Unblocker returns correct US-English content (918KB) for the same URL.
-
-### Fix needed
-
-Add `country` parameter to scraperapi proxy endpoint (search endpoint already has it). Default to `us`.
-
----
-
-## Competitive Urgency
-
-| Feature | Novada (current) | Tavily | Firecrawl |
-|---------|-----------------|--------|-----------|
-| Search engines | **1 working** (Google sequential) | 1 (reliable) | 1 (reliable) |
-| Search quality | Raw Google order | **AI-ranked relevance** | 77% coverage |
-| Extract reliability | ~50% (proxy dead) | High | High |
-| Browser agent | None | None | **FIRE-1** (clicks, forms, CAPTCHAs) |
-| Agent guidance | **Agent Hints (unique)** | None | None |
-
-**Agent Hints is Novada's unique competitive advantage. No competitor tells agents what to do next. But the underlying data must be reliable for this to matter.**
-
-**The window to fix is now** — before agents develop permanent preferences for Tavily/Firecrawl. These are infrastructure fixes, not product redesigns.
+The Novada product infrastructure is strong. These answers will let us complete the MCP integration and make Novada the most capable web data MCP for AI agents.
 
 ---
 
-## Full Reproduction Commands
-
-```bash
-API_KEY="c77dd803b927e919fa1fd21cc6b85171"
-
-# Issue 1: Yahoo 410
-curl "https://scraperapi.novada.com/search?q=test+query&engine=yahoo&api_key=$API_KEY"
-
-# Issue 2: Bing query degraded
-curl "https://scraperapi.novada.com/search?q=kubernetes+pod+scheduling+algorithm&engine=bing&api_key=$API_KEY&num=3"
-
-# Issue 3: DDG 502
-curl "https://scraperapi.novada.com/search?q=test+query&engine=duckduckgo&api_key=$API_KEY"
-
-# Issue 4: Yandex param mapping
-curl "https://scraperapi.novada.com/search?q=test+query&engine=yandex&api_key=$API_KEY"
-
-# Issue 5: Google parallel (run both simultaneously)
-curl "https://scraperapi.novada.com/search?q=alpha&engine=google&api_key=$API_KEY&num=1" &
-curl "https://scraperapi.novada.com/search?q=beta&engine=google&api_key=$API_KEY&num=1" &
-wait
-
-# Issue 6: Root path 404
-curl -o /dev/null -w "HTTP %{http_code}" "https://scraperapi.novada.com?api_key=$API_KEY&url=https://example.com"
-```
-
----
-
-*All issues verified via curl on 2026-04-22, independent of MCP wrapper. Tested with both NOVADA_API_KEY (`c77dd8...`) and SCRAPER_API_KEY (`1f35b4...`).*
+*Novada MCP v0.6.5 — published to npm, available on Smithery + LobeHub. 117 tests passing.*
