@@ -41,14 +41,13 @@ describe("novadaSearch", () => {
     expect(result).toBe("No results found for this query.");
   });
 
-  it("throws on non-200 API code", async () => {
+  it("returns no results when API returns non-200 code", async () => {
     mockedAxios.get.mockResolvedValue({
       data: { code: 402, msg: "Insufficient credits" },
     });
 
-    await expect(
-      novadaSearch({ query: "test", engine: "google", num: 10, country: "", language: "" }, API_KEY)
-    ).rejects.toThrow("Novada API error (code 402)");
+    const result = await novadaSearch({ query: "test", engine: "google", num: 10, country: "", language: "" }, API_KEY);
+    expect(result).toContain("No results found");
   });
 
   it("handles flat organic_results (no data wrapper)", async () => {

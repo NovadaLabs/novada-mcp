@@ -64,16 +64,34 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
     }
   }
 
-  const sources = [...uniqueSources.values()].slice(0, 15);
+  // --- Relevance filtering: score each source against the question keywords ---
+  const questionWords = params.question.toLowerCase().split(/\s+/);
+  const questionKeywords = questionWords.filter(w => !STOP_WORDS.has(w) && w.length > 2);
+
+  const allSources = [...uniqueSources.values()];
+  const scored = allSources.map(s => ({
+    ...s,
+    relevance: scoreRelevance(s, questionKeywords),
+  }));
+
+  // Sort by relevance, keep sources above 20% keyword match (at least 1 keyword)
+  scored.sort((a, b) => b.relevance - a.relevance);
+  const relevant = scored.filter(s => s.relevance >= 0.2);
+  const dropped = scored.length - relevant.length;
+  const sources = relevant.slice(0, 15);
 
   const depthLabel = params.depth === "auto"
     ? `${resolvedDepth} (auto-selected)`
     : resolvedDepth;
 
+  const relevanceNote = dropped > 0
+    ? ` | filtered:${sources.length}/${scored.length} (${dropped} off-topic sources removed)`
+    : "";
+
   const lines: string[] = [
     `## Research Report`,
     `question: "${params.question}"`,
-    `depth:${depthLabel} | searches:${queries.length}${failedCount > 0 ? ` (${failedCount} failed)` : ""} | results:${totalResults} | unique_sources:${sources.length}`,
+    `depth:${depthLabel} | searches:${queries.length}${failedCount > 0 ? ` (${failedCount} failed)` : ""} | results:${totalResults} | unique_sources:${sources.length}${relevanceNote}`,
     params.focus ? `focus: ${params.focus}` : "",
     ``,
     `---`,
@@ -93,12 +111,20 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
     ``,
     `---`,
     `## Agent Hints`,
-    `- ${sources.length} sources found. Extract the most relevant with: \`novada_extract\` with url=[url1, url2]`,
-    `- For narrower research: add \`focus\` param to guide sub-query generation.`,
-    `- For more coverage: use depth='comprehensive' (8-10 searches).`,
-  ].filter(l => l !== "");
+    `- ${sources.length} relevant sources found${dropped > 0 ? ` (${dropped} off-topic removed)` : ""}. Extract the most relevant with: \`novada_extract\` with url=[url1, url2]`,
+  ];
 
-  return lines.join("\n");
+  if (sources.length < 5) {
+    lines.push(`- Few relevant sources found. Try adding \`focus\` param (e.g. focus="${questionKeywords.slice(0, 3).join(" ")}") to improve precision.`);
+  }
+  if (resolvedDepth === "quick") {
+    lines.push(`- For more coverage: use depth='deep' (5-6 searches) or depth='comprehensive' (8-10 searches).`);
+  }
+  if (failedCount > 0) {
+    lines.push(`- ${failedCount} search(es) failed. Results may be incomplete — retry or increase depth.`);
+  }
+
+  return lines.filter(l => l !== "").join("\n");
 }
 
 /** Resolve 'auto' and 'comprehensive' depth to the actual search strategy */
@@ -117,7 +143,14 @@ const STOP_WORDS = new Set([
   "and", "or", "but", "can", "will", "should", "would", "could",
 ]);
 
-/** Generate diverse search queries for broader research coverage */
+/**
+ * Generate diverse search queries anchored to the original question.
+ *
+ * Key design: every sub-query starts with `anchor` (first ~5 meaningful words
+ * of the original question) so that domain-ambiguous terms like "production"
+ * or "building" stay in context. Previous version extracted isolated keywords
+ * which caused "production AI agents" → construction results.
+ */
 function generateSearchQueries(
   question: string,
   deep: boolean,
@@ -125,44 +158,47 @@ function generateSearchQueries(
   focus?: string
 ): string[] {
   const queries: string[] = [question];
-  const words = question.toLowerCase().split(/\s+/);
   const topic = question.replace(/[?!.]+$/, "").trim();
-  const keywords = words.filter(w => !STOP_WORDS.has(w) && w.length > 2);
-  const keyPhrase = keywords.slice(0, 4).join(" ") || topic;
 
-  // Apply focus to sub-queries if provided
+  // Anchor = first 5 significant words of the question, preserving word order
+  // This keeps compound terms like "AI agents" or "production deployment" intact
+  const words = topic.toLowerCase().split(/\s+/);
+  const significantWords = words.filter(w => !STOP_WORDS.has(w) && w.length > 2);
+  const anchor = significantWords.slice(0, 5).join(" ") || topic;
+
   const focusSuffix = focus ? ` ${focus}` : "";
 
-  if (keywords.length > 2) {
-    queries.push(`${keyPhrase} overview explained${focusSuffix}`);
-    queries.push(`${keyPhrase} vs alternatives comparison${focusSuffix}`);
-    if (deep || comprehensive) {
-      queries.push(`${keyPhrase} best practices real world${focusSuffix}`);
-      queries.push(`${keyPhrase} challenges limitations${focusSuffix}`);
-      if (keywords.length >= 2) {
-        queries.push(`"${keywords[0]}" "${keywords[1]}" site:reddit.com OR site:news.ycombinator.com`);
-      } else {
-        queries.push(`${topic} site:reddit.com OR site:news.ycombinator.com`);
-      }
-    }
-    if (comprehensive) {
-      queries.push(`${keyPhrase} case study examples${focusSuffix}`);
-      queries.push(`${keyPhrase} 2024 2025 trends${focusSuffix}`);
-      queries.push(`${keyPhrase} expert opinion${focusSuffix}`);
-    }
-  } else {
-    queries.push(`"${topic}" explained overview${focusSuffix}`);
-    queries.push(`${topic} vs alternatives${focusSuffix}`);
-    if (deep || comprehensive) {
-      queries.push(`${topic} examples use cases${focusSuffix}`);
-      queries.push(`${topic} review experience${focusSuffix}`);
-      queries.push(`${topic} site:reddit.com OR site:news.ycombinator.com`);
-    }
-    if (comprehensive) {
-      queries.push(`${topic} best practices 2025${focusSuffix}`);
-      queries.push(`${topic} tutorial guide${focusSuffix}`);
-    }
+  // All sub-queries are anchored to the topic — never just keyword fragments
+  queries.push(`${anchor} overview guide${focusSuffix}`);
+  queries.push(`${anchor} vs alternatives comparison${focusSuffix}`);
+
+  if (deep || comprehensive) {
+    queries.push(`${anchor} best practices${focusSuffix}`);
+    queries.push(`${anchor} challenges limitations${focusSuffix}`);
+    // Use quoted anchor for community search to force topic coherence
+    const quotedAnchor = significantWords.length >= 2
+      ? `"${significantWords.slice(0, 3).join(" ")}"`
+      : `"${topic}"`;
+    queries.push(`${quotedAnchor} site:reddit.com OR site:news.ycombinator.com`);
+  }
+
+  if (comprehensive) {
+    queries.push(`${anchor} case study examples${focusSuffix}`);
+    queries.push(`${anchor} 2024 2025 trends${focusSuffix}`);
+    queries.push(`${anchor} expert opinion analysis${focusSuffix}`);
   }
 
   return queries;
+}
+
+/**
+ * Score how relevant a source is to the original question.
+ * Returns 0.0–1.0 based on keyword overlap between the source title+snippet
+ * and the question's significant words.
+ */
+function scoreRelevance(source: { title: string; snippet: string }, questionKeywords: string[]): number {
+  if (questionKeywords.length === 0) return 1;
+  const text = `${source.title} ${source.snippet}`.toLowerCase();
+  const matches = questionKeywords.filter(kw => text.includes(kw));
+  return matches.length / questionKeywords.length;
 }

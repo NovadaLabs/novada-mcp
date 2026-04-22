@@ -9,6 +9,8 @@ interface CrawlResult {
   text: string;
   depth: number;
   wordCount: number;
+  fullChars: number;
+  truncated: boolean;
 }
 
 async function fetchPage(url: string, apiKey?: string): Promise<{ html: string; url: string } | null> {
@@ -80,12 +82,17 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
       if (!page) { failedCount++; continue; }
 
       const title = extractTitle(page.html);
-      const text = extractMainContent(page.html).slice(0, 3000);
+      const fullContent = extractMainContent(page.html);
+      const text = fullContent.slice(0, 3000);
       const wordCount = text.split(/\s+/).filter(Boolean).length;
+      const wasTruncated = fullContent.length > 3000;
 
       if (wordCount < 20) continue;
 
-      results.push({ url: batch[i].url, title, text, depth: batch[i].depth, wordCount });
+      results.push({
+        url: batch[i].url, title, text, depth: batch[i].depth, wordCount,
+        fullChars: fullContent.length, truncated: wasTruncated,
+      });
 
       // Discover links, applying path filters before queuing
       const links = extractLinks(page.html, batch[i].url);
@@ -133,10 +140,12 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
     ``,
   ].filter(l => l !== "");
 
+  const truncatedPages = results.filter(r => r.truncated).length;
+
   results.forEach((r, idx) => {
     lines.push(`### [${idx + 1}/${results.length}] ${r.url}`);
     lines.push(`title: ${r.title}`);
-    lines.push(`depth:${r.depth} | words:${r.wordCount}`);
+    lines.push(`depth:${r.depth} | words:${r.wordCount}${r.truncated ? ` | truncated (full page: ${r.fullChars} chars)` : ""}`);
     lines.push(``);
     lines.push(r.text);
     lines.push(``);
@@ -146,6 +155,9 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
 
   lines.push(`## Agent Hints`);
   lines.push(`- ${results.length} pages crawled. For targeted extraction, use novada_map first then novada_extract on chosen pages.`);
+  if (truncatedPages > 0) {
+    lines.push(`- ${truncatedPages} page(s) were truncated at 3,000 chars. Use \`novada_extract\` on specific URLs for full content (up to 30,000 chars).`);
+  }
   if (selectPatterns.length > 0 || excludePatterns.length > 0) {
     lines.push(`- Path filters were active. Remove them to crawl the full site.`);
   }

@@ -1,4 +1,4 @@
-import { fetchViaProxy, extractMainContent, extractTitle, extractDescription, extractLinks } from "../utils/index.js";
+import { fetchViaProxy, extractMainContent, extractTitle, extractDescription, extractLinks, assessContentQuality } from "../utils/index.js";
 import type { ExtractParams } from "./types.js";
 
 export async function novadaExtract(params: ExtractParams, apiKey?: string): Promise<string> {
@@ -102,12 +102,18 @@ async function extractSingle(
   const contentLen = mainContent.length;
   const isTruncated = contentLen >= 30000;
 
+  // Content quality assessment — detect language, thin content, blocks
+  const quality = assessContentQuality(html, contentLen);
+  const qualityFlags = quality.warnings.length > 0
+    ? ` | WARNING: ${quality.warnings.join("; ")}`
+    : "";
+
   const lines: string[] = [
     `## Extracted Content`,
     `url: ${params.url}`,
     `title: ${title}`,
     ...(description ? [`description: ${description}`] : []),
-    `format: ${params.format || "markdown"} | chars:${contentLen}${isTruncated ? ` (truncated at 30,000 — full page larger)` : ""} | links:${allLinks.length}`,
+    `format: ${params.format || "markdown"} | chars:${contentLen}${isTruncated ? ` (truncated at 30,000 — full page larger)` : ""} | links:${allLinks.length}${qualityFlags}`,
     ``,
     `---`,
     ``,
@@ -121,12 +127,26 @@ async function extractSingle(
     }
   }
 
+  // Dynamic Agent Hints — context-specific, not generic
   lines.push(``, `---`, `## Agent Hints`);
-  if (isTruncated) {
-    lines.push(`- Content truncated at 30,000 chars. Use \`novada_crawl\` with max_pages=1 to get complete content including JS-rendered sections.`);
+
+  if (quality.isBlocked) {
+    lines.push(`- This page appears to be a CAPTCHA or block page. Use \`novada_research\` to find the same information from other sources.`);
+  } else if (quality.isThin) {
+    lines.push(`- Very short content (${contentLen} chars). The page may be JS-rendered, geo-redirected, or login-gated.`);
+    if (quality.lang && quality.lang !== "en") {
+      lines.push(`- Content language: '${quality.lang}' — this may be a geo-redirect. Try a different source or use \`novada_research\` instead.`);
+    }
+  } else if (isTruncated) {
+    lines.push(`- Content truncated at 30,000 chars. Use \`novada_crawl\` with max_pages=1 to get complete content.`);
   }
+
+  if (!quality.isThin && !quality.isBlocked) {
+    lines.push(`- To read full text: content above is ${contentLen > 5000 ? "comprehensive" : "a summary"} (${contentLen} chars).`);
+  }
+
   try {
-    lines.push(`- To discover more pages: \`novada_map\` with url="${new URL(params.url).origin}"`);
+    lines.push(`- More pages on this domain: \`novada_map\` with url="${new URL(params.url).origin}"`);
   } catch { /* ignore URL parse error */ }
   if (params.query) {
     lines.push(`- Query context: "${params.query}". Focus analysis on this topic.`);

@@ -146,6 +146,59 @@ export function extractDescription(html: string): string {
   ).trim();
 }
 
+/** Content quality signals returned to help agents judge response quality */
+export interface ContentQuality {
+  /** Detected language from <html lang> or <meta> — empty if unknown */
+  lang: string;
+  /** True if content is suspiciously short (<500 chars of main content) */
+  isThin: boolean;
+  /** True if the page looks like a CAPTCHA, block page, or login wall */
+  isBlocked: boolean;
+  /** Human-readable warnings for the agent (empty array = no issues) */
+  warnings: string[];
+}
+
+/** Detect content quality issues BEFORE returning to the agent */
+export function assessContentQuality(html: string, mainContentLength: number): ContentQuality {
+  if (!html) return { lang: "", isThin: true, isBlocked: false, warnings: ["Empty response"] };
+
+  const $ = cheerio.load(html);
+  const warnings: string[] = [];
+
+  // Detect language from <html lang="..."> or <meta http-equiv="content-language">
+  const htmlLang = ($("html").attr("lang") || "").split("-")[0].toLowerCase();
+  const metaLang = ($('meta[http-equiv="content-language"]').attr("content") || "").split("-")[0].toLowerCase();
+  const lang = htmlLang || metaLang || "";
+
+  // Warn if content appears to be in a non-English locale (when no language was requested)
+  if (lang && lang !== "en" && lang !== "") {
+    warnings.push(`Content language detected: '${lang}' — may be a geo-redirected page`);
+  }
+
+  // Thin content detection
+  const isThin = mainContentLength < 500;
+  if (isThin) {
+    warnings.push(`Very short content (${mainContentLength} chars) — page may be blocked, gated, or JS-rendered`);
+  }
+
+  // Block/CAPTCHA detection
+  const lower = html.toLowerCase();
+  const isBlocked =
+    lower.includes("access denied") ||
+    lower.includes("403 forbidden") ||
+    (lower.includes("cloudflare") && lower.includes("ray id")) ||
+    lower.includes("captcha") ||
+    lower.includes("bot detected") ||
+    lower.includes("automated access") ||
+    lower.includes("checking your browser");
+
+  if (isBlocked) {
+    warnings.push("Page appears to be a CAPTCHA or bot-block page, not real content");
+  }
+
+  return { lang, isThin, isBlocked, warnings };
+}
+
 /** Resolve a single href to an absolute URL */
 function resolveHref(href: string, baseUrl?: string): string | null {
   if (href.startsWith("#") || href.startsWith("javascript:") || href.startsWith("mailto:")) return null;

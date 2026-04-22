@@ -74,16 +74,16 @@ describe("novadaResearch", () => {
       data: {
         data: {
           organic_results: [
-            { title: "Same Source", url: "https://same.com/page", description: "Same" },
+            { title: "Dedup Test Guide", url: "https://same.com/page", description: "A guide about dedup test query here" },
           ],
         },
       },
     });
 
     const result = await novadaResearch({ question: "Dedup test query here", depth: "quick" }, API_KEY);
-    // Even though 3 queries all return the same URL, it should appear once
+    // Even though 3 queries all return the same URL, it should appear once in findings + once in sources
     const sourceMatches = result.match(/https:\/\/same\.com\/page/g);
-    // URL appears in Key Findings + Sources = 2 times, not 6
+    expect(sourceMatches).not.toBeNull();
     expect(sourceMatches!.length).toBeLessThanOrEqual(3);
   });
 });
