@@ -26,6 +26,7 @@
   <strong>Language:</strong>
   English &nbsp;·&nbsp; <a href="README.zh.md">中文</a>
 </p>
+
 ---
 
 **Jump to:** [Quick Start](#quick-start) · [Tools](#tools) · [Prompts](#prompts) · [Resources](#resources) · [Examples](#real-output-examples) · [Use Cases](#use-cases) · [Comparison](#why-novada)
