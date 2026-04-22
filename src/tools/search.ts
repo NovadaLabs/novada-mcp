@@ -1,6 +1,7 @@
 import { fetchWithRetry, USER_AGENT, cleanParams } from "../utils/index.js";
 import { SCRAPER_API_BASE } from "../config.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
+import { getSearchEngineError } from "./types.js";
 
 export async function novadaSearch(params: SearchParams, apiKey: string): Promise<string> {
   const engine = params.engine || "google";
@@ -37,21 +38,30 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   const cleaned = cleanParams(rawParams) as Record<string, string>;
   const searchParams = new URLSearchParams(cleaned);
 
-  const response = await fetchWithRetry(
-    `${SCRAPER_API_BASE}/search?${searchParams.toString()}`,
-    {
-      headers: {
-        "User-Agent": USER_AGENT,
-        Origin: "https://www.novada.com",
-        Referer: "https://www.novada.com/",
-      },
-    }
-  );
+  let response;
+  try {
+    response = await fetchWithRetry(
+      `${SCRAPER_API_BASE}/search?${searchParams.toString()}`,
+      {
+        headers: {
+          "User-Agent": USER_AGENT,
+          Origin: "https://www.novada.com",
+          Referer: "https://www.novada.com/",
+        },
+      }
+    );
+  } catch (err) {
+    const rawMsg = err instanceof Error ? err.message : String(err);
+    const engineSpecific = getSearchEngineError(engine, rawMsg);
+    throw new Error(engineSpecific ?? rawMsg);
+  }
 
   const data: NovadaApiResponse = response.data;
 
   if (data.code && data.code !== 200 && data.code !== 0) {
-    throw new Error(`Novada API error (code ${data.code}): ${data.msg || "Unknown error"}`);
+    const rawMsg = `Novada API error (code ${data.code}): ${data.msg || "Unknown error"}`;
+    const engineSpecific = getSearchEngineError(engine, rawMsg);
+    throw new Error(engineSpecific ?? rawMsg);
   }
 
   const results: NovadaSearchResult[] = data.data?.organic_results || data.organic_results || [];
@@ -104,6 +114,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   lines.push(`- To read any result in full: \`novada_extract\` with its url`);
   lines.push(`- To batch-read multiple results: \`novada_extract\` with \`url=[url1, url2, ...]\``);
   lines.push(`- For deeper multi-source research: \`novada_research\``);
+  if (engine !== "google") {
+    lines.push(`- Note: Google is the most reliable engine. If this engine failed, retry with engine='google'.`);
+  }
 
   return lines.join("\n");
 }

@@ -100,14 +100,14 @@ async function extractSingle(
 
   // Markdown output (default)
   const contentLen = mainContent.length;
-  const isTruncated = contentLen >= 8000;
+  const isTruncated = contentLen >= 30000;
 
   const lines: string[] = [
     `## Extracted Content`,
     `url: ${params.url}`,
     `title: ${title}`,
     ...(description ? [`description: ${description}`] : []),
-    `format: ${params.format || "markdown"} | chars:${contentLen}${isTruncated ? " (may be truncated)" : ""} | links:${allLinks.length}`,
+    `format: ${params.format || "markdown"} | chars:${contentLen}${isTruncated ? ` (truncated at 30,000 — full page larger)` : ""} | links:${allLinks.length}`,
     ``,
     `---`,
     ``,
@@ -123,7 +123,7 @@ async function extractSingle(
 
   lines.push(``, `---`, `## Agent Hints`);
   if (isTruncated) {
-    lines.push(`- Content may be truncated. Use novada_map to find specific subpages.`);
+    lines.push(`- Content truncated at 30,000 chars. Use \`novada_crawl\` with max_pages=1 to get complete content including JS-rendered sections.`);
   }
   try {
     lines.push(`- To discover more pages: \`novada_map\` with url="${new URL(params.url).origin}"`);

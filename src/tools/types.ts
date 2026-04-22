@@ -154,13 +154,78 @@ function sanitizeMessage(msg: string): string {
     .replace(/https?:\/\/scraperapi\.novada\.com[^\s"')]+/gi, "[novada-api-url]");
 }
 
-export function classifyError(error: unknown): NovadaError {
+/** Map known search engine failure patterns to actionable messages */
+export function getSearchEngineError(engine: string, errorMsg: string): string | null {
+  const msg = errorMsg.toLowerCase();
+
+  // Yahoo: URL builder drops q param → 410
+  if (engine === "yahoo" && (msg.includes("410") || msg.includes("empty query"))) {
+    return (
+      `Yahoo search failed (backend drops the query parameter — known bug).\n` +
+      `→ Switch engine: use engine='google' for the same query.\n` +
+      `→ For research questions, novada_research is more reliable than novada_search.`
+    );
+  }
+
+  // Yandex: no API key provisioned
+  if (engine === "yandex" && (msg.includes("invalid_api_key") || msg.includes("api_key"))) {
+    return (
+      `Yandex search unavailable (no Yandex Search API key provisioned).\n` +
+      `→ Switch engine: use engine='google' or engine='bing'.\n` +
+      `→ Google is the most reliable engine for this API.`
+    );
+  }
+
+  // Bing: query string silently dropped
+  if (engine === "bing" && msg.includes("no results")) {
+    return (
+      `Bing search returned no results (known issue: query string may be dropped by backend).\n` +
+      `→ Switch engine: use engine='google' for the same query.\n` +
+      `→ Or use novada_research which uses Google internally and is more reliable.`
+    );
+  }
+
+  // DuckDuckGo: workers down
+  if (engine === "duckduckgo" && (msg.includes("api_down") || msg.includes("down"))) {
+    return (
+      `DuckDuckGo unavailable (workers down at Novada backend).\n` +
+      `→ Switch engine: use engine='google' for the same query.\n` +
+      `→ novada_research is a better choice for research questions.`
+    );
+  }
+
+  // Google: WorkerPool 413 from parallel calls
+  if (engine === "google" && (msg.includes("413") || msg.includes("workerpool"))) {
+    return (
+      `Google search temporarily unavailable (WorkerPool 413 — parallel call overload).\n` +
+      `→ Retry this call once — sequential calls succeed.\n` +
+      `→ Or use novada_research which runs Google searches sequentially and avoids this limit.`
+    );
+  }
+
+  return null;
+}
+
+export function classifyError(error: unknown, engine?: string): NovadaError {
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
+
+    // Search engine-specific errors — return actionable message if matched
+    if (engine) {
+      const engineError = getSearchEngineError(engine, error.message);
+      if (engineError) {
+        return {
+          code: NovadaErrorCode.UNKNOWN,
+          message: engineError,
+          retryable: false,
+        };
+      }
+    }
+
     if (msg.includes("401") || msg.includes("api_key") || msg.includes("unauthorized")) {
       return {
         code: NovadaErrorCode.INVALID_API_KEY,
-        message: `Invalid or missing API key. Get one at ${DOCS_BASE}`,
+        message: `Invalid or missing API key. Get one at ${DOCS_BASE}\n→ Set NOVADA_API_KEY in your MCP config.`,
         retryable: false,
         docsUrl: DOCS_BASE,
       };
@@ -168,7 +233,7 @@ export function classifyError(error: unknown): NovadaError {
     if (msg.includes("429") || msg.includes("rate") || msg.includes("limit")) {
       return {
         code: NovadaErrorCode.RATE_LIMITED,
-        message: "Rate limit exceeded. Wait and retry.",
+        message: "Rate limit exceeded.\n→ Wait 5–10 seconds and retry.\n→ For search, use novada_research which is more conservative with API calls.",
         retryable: true,
         docsUrl: DOCS_BASE,
       };
@@ -176,14 +241,14 @@ export function classifyError(error: unknown): NovadaError {
     if (msg.includes("timeout") || msg.includes("econnrefused") || msg.includes("enotfound")) {
       return {
         code: NovadaErrorCode.URL_UNREACHABLE,
-        message: `URL unreachable: ${sanitizeMessage(error.message)}`,
+        message: `URL unreachable: ${sanitizeMessage(error.message)}\n→ Check the URL is valid and publicly accessible.\n→ If this is a bot-protected site, NOVADA_UNBLOCKER_KEY enables AI CAPTCHA bypass.`,
         retryable: true,
       };
     }
     if (msg.includes("503") || msg.includes("502")) {
       return {
         code: NovadaErrorCode.API_DOWN,
-        message: "Novada API is temporarily unavailable. Retry in a moment.",
+        message: "Novada API is temporarily unavailable.\n→ Retry in 10–30 seconds.\n→ If the issue persists, check https://www.novada.com for status.",
         retryable: true,
       };
     }

@@ -125,7 +125,7 @@ export function extractMainContent(html: string): string {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  return result.slice(0, 8000);
+  return result.slice(0, 30000);
 }
 
 /** Extract page title from HTML */

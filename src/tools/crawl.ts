@@ -47,6 +47,11 @@ function shouldCrawlUrl(
 
 export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise<string> {
   const maxPages = Math.min(params.max_pages || 5, 20);
+
+  // Warn early for large crawl requests — avoids surprise timeouts
+  const largeCrawlWarning = maxPages > 10
+    ? `⚠️ Large crawl (${maxPages} pages requested). This may take 60–90s.\n   For time-sensitive use, consider: novada_map → select specific URLs → novada_extract (batch).\n\n`
+    : "";
   const visited = new Set<string>();
   const queue: { url: string; depth: number }[] = [{ url: params.url, depth: 0 }];
   const results: CrawlResult[] = [];
@@ -102,7 +107,7 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
   }
 
   if (results.length === 0) {
-    return `Failed to crawl ${params.url}. The site may be unreachable or blocking automated access.`;
+    return `${largeCrawlWarning}Failed to crawl ${params.url}. The site may be unreachable or blocking automated access.`;
   }
 
   const totalWords = results.reduce((sum, r) => sum + r.wordCount, 0);
@@ -118,6 +123,7 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
     : "";
 
   const lines: string[] = [
+    largeCrawlWarning ? largeCrawlWarning.trimEnd() : "",
     `## Crawl Results`,
     `root: ${params.url}`,
     `pages:${results.length} | strategy:${params.strategy || "bfs"} | total_words:${totalWords} | failed:${failedCount}${instructionsNote}`,

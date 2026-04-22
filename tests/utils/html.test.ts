@@ -105,11 +105,11 @@ describe("extractMainContent", () => {
     expect(extractMainContent("")).toBe("");
   });
 
-  it("truncates output to 8000 characters", () => {
-    const longParagraph = "A".repeat(10000);
+  it("truncates output to 30000 characters", () => {
+    const longParagraph = "A".repeat(40000);
     const html = `<html><body><div><p>${longParagraph}</p></div></body></html>`;
     const result = extractMainContent(html);
-    expect(result.length).toBeLessThanOrEqual(8000);
+    expect(result.length).toBeLessThanOrEqual(30000);
   });
 
   it("strips HTML comments", () => {
