@@ -2,8 +2,8 @@ import { z } from "zod";
 
 // ─── URL Safety ─────────────────────────────────────────────────────────────
 
-/** Only allow HTTP/HTTPS URLs — block file://, ftp://, gopher://, internal IPs */
-const BLOCKED_HOSTS = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|\[::1\])$/i;
+/** Only allow HTTP/HTTPS URLs — block file://, ftp://, gopher://, internal IPs (IPv4 + IPv6) */
+const BLOCKED_HOSTS = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|\[::1\]|\[fc[0-9a-f]{2}:.*\]|\[fd[0-9a-f]{2}:.*\]|\[fe80:.*\])$/i;
 
 const safeUrl = z.string()
   .url("A valid URL is required")

@@ -75,4 +75,35 @@ describe("novadaSearch", () => {
     expect(calledUrl).toContain("country=de");
     expect(calledUrl).toContain("language=de");
   });
+
+  it("auto-fallbacks to Google when non-Google engine returns no results", async () => {
+    let callCount = 0;
+    mockedAxios.get.mockImplementation(async (url: string) => {
+      callCount++;
+      if (callCount === 1) {
+        // Yahoo returns error code
+        return { data: { code: 410, msg: "empty query built" } };
+      }
+      // Google fallback returns results
+      return {
+        data: { data: { organic_results: [{ title: "Fallback Result", url: "https://fallback.com", description: "From Google" }] } },
+      };
+    });
+
+    const result = await novadaSearch({ query: "test", engine: "yahoo", num: 10, country: "", language: "" }, API_KEY);
+    expect(result).toContain("Fallback Result");
+    expect(result).toContain("fell back to google");
+    expect(callCount).toBe(2);
+  });
+
+  it("includes engine-specific error context in fallback note", async () => {
+    mockedAxios.get.mockImplementation(async () => {
+      return { data: { code: 410, msg: "Build url error: empty query built" } };
+    });
+
+    const result = await novadaSearch({ query: "test", engine: "yahoo", num: 10, country: "", language: "" }, API_KEY);
+    // Both yahoo and google fallback return no results
+    expect(result).toContain("No results found");
+    expect(result).toContain("yahoo");
+  });
 });

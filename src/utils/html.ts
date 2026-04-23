@@ -1,4 +1,6 @@
 import * as cheerio from "cheerio";
+import type { Cheerio } from "cheerio";
+import type { Element as CheerioElement } from "domhandler";
 
 /** Elements to completely remove before content extraction */
 const REMOVE_TAGS = [
@@ -53,12 +55,11 @@ export function extractMainContent(html: string): string {
   }).remove();
 
   // Try semantic content selectors
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let $content: any = null;
+  let $content: Cheerio<CheerioElement> | null = null;
   for (const selector of CONTENT_SELECTORS) {
     const $el = $(selector).first();
     if ($el.length && ($el.text() || "").trim().length > 200) {
-      $content = $el;
+      $content = $el as Cheerio<CheerioElement>;
       break;
     }
   }
@@ -68,7 +69,7 @@ export function extractMainContent(html: string): string {
     for (const selector of BOILERPLATE_SELECTORS) {
       $(selector).remove();
     }
-    $content = $("body");
+    $content = $("body") as Cheerio<CheerioElement>;
   }
 
   if (!$content || !$content.length) return "";
@@ -76,12 +77,10 @@ export function extractMainContent(html: string): string {
   // Convert to markdown-like text
   const lines: string[] = [];
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   // Exclude td/th — tables handled separately below to avoid duplication
-  $content.find("h1, h2, h3, h4, h5, h6, p, li, blockquote, pre, dt, dd").filter((_: number, el: any) => {
-    // Skip elements inside tables to prevent duplicate content
+  $content.find("h1, h2, h3, h4, h5, h6, p, li, blockquote, pre, dt, dd").filter((_: number, el: CheerioElement) => {
     return $(el).parents("table").length === 0 || ["dt", "dd"].includes((el.tagName || "").toLowerCase());
-  }).each((_: number, el: any) => {
+  }).each((_: number, el: CheerioElement) => {
     const $el = $(el);
     const tag = (el.tagName || "").toLowerCase();
     const text = $el.text().replace(/\s+/g, " ").trim();
@@ -102,8 +101,7 @@ export function extractMainContent(html: string): string {
   });
 
   // Handle tables as markdown tables
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  $content.find("table").each((_: number, table: any) => {
+  $content.find("table").each((_: number, table: CheerioElement) => {
     const $table = $(table);
     const rows: string[][] = [];
     $table.find("tr").each((_, tr) => {
@@ -181,16 +179,18 @@ export function assessContentQuality(html: string, mainContentLength: number): C
     warnings.push(`Very short content (${mainContentLength} chars) — page may be blocked, gated, or JS-rendered`);
   }
 
-  // Block/CAPTCHA detection
-  const lower = html.toLowerCase();
+  // Block/CAPTCHA detection — use parsed title + body text to avoid false positives
+  // from pages that merely mention these terms in content
+  const titleText = $("title").first().text().toLowerCase();
+  const bodyText = ($("body").text() || "").slice(0, 2000).toLowerCase();
   const isBlocked =
-    lower.includes("access denied") ||
-    lower.includes("403 forbidden") ||
-    (lower.includes("cloudflare") && lower.includes("ray id")) ||
-    lower.includes("captcha") ||
-    lower.includes("bot detected") ||
-    lower.includes("automated access") ||
-    lower.includes("checking your browser");
+    titleText.includes("access denied") ||
+    titleText.includes("403 forbidden") ||
+    titleText.includes("just a moment") ||
+    titleText.includes("attention required") ||
+    (bodyText.includes("ray id") && bodyText.includes("cloudflare") && mainContentLength < 1000) ||
+    (bodyText.includes("captcha") && mainContentLength < 1000) ||
+    (titleText.includes("bot") && bodyText.includes("detected"));
 
   if (isBlocked) {
     warnings.push("Page appears to be a CAPTCHA or bot-block page, not real content");

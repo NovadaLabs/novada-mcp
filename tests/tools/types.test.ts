@@ -7,6 +7,7 @@ import {
   validateResearchParams,
   validateMapParams,
   classifyError,
+  getSearchEngineError,
   NovadaErrorCode,
 } from "../../src/tools/types.js";
 
@@ -218,5 +219,38 @@ describe("classifyError", () => {
     const err = classifyError("just a string");
     expect(err.code).toBe(NovadaErrorCode.UNKNOWN);
     expect(err.message).toBe("just a string");
+  });
+});
+
+describe("getSearchEngineError", () => {
+  it("returns actionable message for Yahoo 410", () => {
+    const msg = getSearchEngineError("yahoo", "code 410: empty query built");
+    expect(msg).not.toBeNull();
+    expect(msg).toContain("Yahoo");
+    expect(msg).toContain("google");
+  });
+
+  it("returns actionable message for DuckDuckGo down", () => {
+    const msg = getSearchEngineError("duckduckgo", "API_DOWN service unavailable");
+    expect(msg).not.toBeNull();
+    expect(msg).toContain("DuckDuckGo");
+  });
+
+  it("returns actionable message for Google 413 WorkerPool", () => {
+    const msg = getSearchEngineError("google", "413 WorkerPool not initialized");
+    expect(msg).not.toBeNull();
+    expect(msg).toContain("413");
+    expect(msg).toContain("novada_research");
+  });
+
+  it("returns null for unknown errors", () => {
+    const msg = getSearchEngineError("google", "some random error");
+    expect(msg).toBeNull();
+  });
+
+  it("returns actionable message for Yandex key issue", () => {
+    const msg = getSearchEngineError("yandex", "INVALID_API_KEY no key");
+    expect(msg).not.toBeNull();
+    expect(msg).toContain("Yandex");
   });
 });

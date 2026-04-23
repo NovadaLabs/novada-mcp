@@ -52,7 +52,7 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
 
   // Warn early for large crawl requests — avoids surprise timeouts
   const largeCrawlWarning = maxPages > 10
-    ? `⚠️ Large crawl (${maxPages} pages requested). This may take 60–90s.\n   For time-sensitive use, consider: novada_map → select specific URLs → novada_extract (batch).\n\n`
+    ? `WARNING: Large crawl (${maxPages} pages requested). This may take 60–90s.\n   For time-sensitive use, consider: novada_map → select specific URLs → novada_extract (batch).\n\n`
     : "";
   const visited = new Set<string>();
   const queue: { url: string; depth: number }[] = [{ url: params.url, depth: 0 }];

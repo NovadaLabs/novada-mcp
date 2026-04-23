@@ -25,7 +25,7 @@ describe("novadaResearch", () => {
     });
 
     const result = await novadaResearch({ question: "How do AI agents work?", depth: "quick" }, API_KEY);
-    expect(result).toContain("# Research Report");
+    expect(result).toContain("## Research Report");
     expect(result).toContain("How do AI agents work?");
     expect(result).toContain("## Search Queries Used");
     expect(result).toContain("## Key Findings");

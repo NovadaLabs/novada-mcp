@@ -114,7 +114,7 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
     `- ${sources.length} relevant sources found${dropped > 0 ? ` (${dropped} off-topic removed)` : ""}. Extract the most relevant with: \`novada_extract\` with url=[url1, url2]`,
   ];
 
-  if (sources.length < 5) {
+  if (sources.length < 5 && questionKeywords.length > 0) {
     lines.push(`- Few relevant sources found. Try adding \`focus\` param (e.g. focus="${questionKeywords.slice(0, 3).join(" ")}") to improve precision.`);
   }
   if (resolvedDepth === "quick") {
@@ -127,14 +127,16 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
   return lines.filter(l => l !== "").join("\n");
 }
 
-/** Resolve 'auto' and 'comprehensive' depth to the actual search strategy */
-function resolveDepth(depth: string, question: string): string {
+type ResolvedDepth = "quick" | "deep" | "comprehensive";
+
+/** Resolve 'auto' depth to a concrete strategy based on question complexity */
+function resolveDepth(depth: ResearchParams["depth"], question: string): ResolvedDepth {
   if (depth === "auto") {
     const isComplex = question.length > 80
       || /\b(compare|versus|vs|why|how does|best|worst|difference between|trade-off|pros and cons|review)\b/i.test(question);
     return isComplex ? "deep" : "quick";
   }
-  return depth; // quick, deep, comprehensive pass through
+  return depth as ResolvedDepth; // quick, deep, comprehensive pass through
 }
 
 const STOP_WORDS = new Set([

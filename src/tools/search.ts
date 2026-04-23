@@ -165,6 +165,14 @@ async function executeSearch(
   }
 }
 
+/** Validate that a decoded URL is a valid HTTP(S) URL */
+function isValidHttpUrl(s: string): boolean {
+  try {
+    const u = new URL(s);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch { return false; }
+}
+
 /** Unwrap Bing redirect/base64 encoded URLs */
 function unwrapBingUrl(url: string): string {
   if (url.includes("bing.com/ck/a") || url.includes("r.bing.com")) {
@@ -175,16 +183,17 @@ function unwrapBingUrl(url: string): string {
         const cleaned = realUrl.replace(/^a1/, "");
         try {
           const decoded = Buffer.from(cleaned, "base64").toString("utf8");
-          if (decoded.startsWith("http")) return decoded;
+          if (isValidHttpUrl(decoded)) return decoded;
         } catch { /* not base64 */ }
-        return decodeURIComponent(cleaned);
+        const decodedUri = decodeURIComponent(cleaned);
+        if (isValidHttpUrl(decodedUri)) return decodedUri;
       }
     } catch { /* keep original */ }
   }
   if (!url.startsWith("http") && /^[A-Za-z0-9+/=]+$/.test(url) && url.length > 20) {
     try {
       const decoded = Buffer.from(url, "base64").toString("utf8");
-      if (decoded.startsWith("http")) return decoded;
+      if (isValidHttpUrl(decoded)) return decoded;
     } catch { /* keep original */ }
   }
   return url;
