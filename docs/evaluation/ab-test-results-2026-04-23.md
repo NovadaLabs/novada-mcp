@@ -37,23 +37,75 @@ The API key `c77dd8...` package has expired. This endpoint is no longer usable w
 
 ---
 
-## Final Engine Routing Decision
+## Final Engine Routing Decision (Updated After Round 2 — Full Params)
+
+**Round 2 discovery:** Google and Yandex were failing because we were missing required parameters. With the full dashboard params, ALL 4 engines hit 100%.
+
+### Round 2 results (20 tests with full params)
+
+| Engine | New Tests | Completion | Cumulative |
+|--------|-----------|-----------|------------|
+| **Google** | 10/10 ✅ | **100%** | 12/36 (33% — dragged down by earlier 24 failures without full params) |
+| **Yandex** | 10/10 ✅ | **100%** | 16/17 (94%) |
+| **Bing** | (from R1) | **100%** | 15/15 |
+| **DuckDuckGo** | (from R1) | **100%** | 11/11 |
+
+### Correct Parameters Per Engine
 
 ```
-PRIMARY (Scraper API — async):
-  bing        → 100% completion, $0.0012/task, 11-25KB results
-  duckduckgo  → 100% completion, $0.0012/task, 17-37KB results
+Google:
+  scraper_name=google.com
+  scraper_id=google_search
+  scraper_errors=true
+  domain=google.com        ← REQUIRED (was missing → 500 errors)
+  country=us               ← REQUIRED
+  hl=en                    ← REQUIRED
+  device=desktop
+  json=1
+  render_js=false
+  no_cache=false
+  ai_overview=false
+  safe=off
 
-SECONDARY (Scraper API — lower reliability):
-  yandex      → 67% completion, use scraper_id="yandex" + yandex_domain=yandex.com
+Bing:
+  scraper_name=bing.com
+  scraper_id=bing_search
+  device=desktop
+  json=1
+  safe=off
 
-DO NOT USE:
-  google      → 9% completion on Scraper API (500 errors)
-  google      → scraperapi.novada.com package expired
-  yahoo       → not available on either interface
+DuckDuckGo:
+  scraper_name=duckduckgo.com
+  scraper_id=duckduckgo
+  json=1
 
-DEFAULT ENGINE: bing (most reliable + best result quality)
-FALLBACK: duckduckgo (equally reliable)
+Yandex:
+  scraper_name=yandex.com
+  scraper_id=yandex         ← NOT yandex_search (11006)
+  yandex_domain=yandex.com  ← REQUIRED
+  rstr=false                ← REQUIRED
+  json=1
+  no_cache=false
+
+Yahoo:
+  NOT AVAILABLE on Scraper API (11006 with all scraper_id variants)
+```
+
+### Engine Routing
+
+```
+ALL 4 ENGINES → Scraper API (scraper.novada.com/request)
+
+  google      → 100% with full params (domain, country, hl required)
+  bing        → 100%
+  duckduckgo  → 100%
+  yandex      → 100% with full params (yandex_domain, rstr required)
+  yahoo       → auto-fallback to bing (not available)
+
+DEFAULT ENGINE: google (richest results, 40KB avg)
+FALLBACK: bing (most reliable historically)
+
+scraperapi.novada.com → DEPRECATED (package expired, 402)
 ```
 
 ---
