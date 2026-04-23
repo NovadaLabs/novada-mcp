@@ -72,13 +72,14 @@ export async function fetchViaProxy(
         return { ...response, data: html } as AxiosResponse;
       }
     } catch (error) {
-      if (
-        error instanceof AxiosError &&
-        (error.response?.status === 401 || error.response?.status === 403)
-      ) {
-        throw error; // auth error — don't mask with fallback
+      if (error instanceof AxiosError) {
+        const status = error.response?.status;
+        // Re-throw auth and rate-limit errors — don't mask with direct fetch fallback
+        if (status === 401 || status === 403 || status === 429) {
+          throw error;
+        }
       }
-      // Fall through to direct fetch
+      // Fall through to direct fetch for other errors (network, 5xx, etc.)
     }
   }
 

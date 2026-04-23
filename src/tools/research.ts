@@ -184,7 +184,8 @@ function generateSearchQueries(
 
   if (comprehensive) {
     queries.push(`${anchor} case study examples${focusSuffix}`);
-    queries.push(`${anchor} 2024 2025 trends${focusSuffix}`);
+    const year = new Date().getFullYear();
+    queries.push(`${anchor} ${year - 1} ${year} trends${focusSuffix}`);
     queries.push(`${anchor} expert opinion analysis${focusSuffix}`);
   }
 

@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import { fetchWithRetry, USER_AGENT, cleanParams } from "../utils/index.js";
 import { SCRAPER_API_BASE } from "../config.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
@@ -78,10 +79,15 @@ async function executeSearchWithFallback(
 ): Promise<{ results: NovadaSearchResult[]; engine: string; fallbackNote: string }> {
   const result = await executeSearch(params, engine, apiKey);
 
-  // If the requested engine returned results, use them
   if (result.results.length > 0) {
     return { results: result.results, engine, fallbackNote: "" };
   }
+
+  // Surface engine-specific error context in the fallback note
+  const engineError = result.error ? getSearchEngineError(engine, result.error) : null;
+  const errorContext = engineError
+    ? engineError.split("\n")[0]
+    : result.error || "no results";
 
   // If already Google, nothing to fall back to
   if (engine === "google") {
@@ -94,11 +100,11 @@ async function executeSearchWithFallback(
     return {
       results: fallback.results,
       engine: "google",
-      fallbackNote: `${engine} unavailable, fell back to google`,
+      fallbackNote: `${engine}: ${errorContext} — fell back to google`,
     };
   }
 
-  return { results: [], engine, fallbackNote: `${engine} and google both returned no results` };
+  return { results: [], engine, fallbackNote: `${engine}: ${errorContext}; google also returned no results` };
 }
 
 /** Execute a single search call against one engine */
@@ -150,6 +156,11 @@ async function executeSearch(
 
     return { results: data.data?.organic_results || data.organic_results || [] };
   } catch (err) {
+    // Re-throw auth and rate-limit errors — don't mask them with a silent fallback
+    if (err instanceof AxiosError &&
+        (err.response?.status === 401 || err.response?.status === 403 || err.response?.status === 429)) {
+      throw err;
+    }
     return { results: [], error: err instanceof Error ? err.message : String(err) };
   }
 }
