@@ -21,6 +21,7 @@ import {
   novadaVerify,
   novadaUnblock,
   novadaBrowser,
+  novadaHealth,
   validateSearchParams,
   validateExtractParams,
   validateCrawlParams,
@@ -31,6 +32,7 @@ import {
   validateVerifyParams,
   validateUnblockParams,
   validateBrowserParams,
+  validateHealthParams,
   classifyError,
 } from "./tools/index.js";
 import { ZodError } from "zod";
@@ -45,6 +47,7 @@ import {
   VerifyParamsSchema,
   UnblockParamsSchema,
   BrowserParamsSchema,
+  HealthParamsSchema,
 } from "./tools/types.js";
 
 // ─── Configuration ───────────────────────────────────────────────────────────
@@ -173,6 +176,15 @@ const TOOLS = [
     inputSchema: zodToMcpSchema(BrowserParamsSchema),
     annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
   },
+  {
+    name: "novada_health",
+    description: `Check which Novada API products are active on your API key.
+
+**Best for:** First-time setup, diagnosing why a tool is failing, confirming your account has the right products activated.
+**Returns:** Status table for Search, Extract, Scraper API, Proxy, and Browser API — with activation links for anything not yet enabled.`,
+    inputSchema: zodToMcpSchema(HealthParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  },
 ];
 
 // ─── MCP Server ──────────────────────────────────────────────────────────────
@@ -269,11 +281,15 @@ class NovadaMCPServer {
           case "novada_browser":
             result = await novadaBrowser(validateBrowserParams(args as Record<string, unknown>));
             break;
+          case "novada_health":
+            validateHealthParams(args as Record<string, unknown>);
+            result = await novadaHealth(API_KEY);
+            break;
           default:
             return {
               content: [{
                 type: "text" as const,
-                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_scrape, novada_proxy, novada_verify, novada_unblock, novada_browser`,
+                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_scrape, novada_proxy, novada_verify, novada_unblock, novada_browser, novada_health`,
               }],
               isError: true,
             };
@@ -309,7 +325,7 @@ class NovadaMCPServer {
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error(`Novada MCP server v${VERSION} running on stdio — 10 tools loaded`);
+    console.error(`Novada MCP server v${VERSION} running on stdio — 11 tools loaded`);
   }
 }
 
@@ -342,7 +358,7 @@ Environment:
 Connect to Claude Code:
   claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
 
-Tools (10):
+Tools (11):
   novada_search    Search the web via Google, Bing, and 3 more engines
   novada_extract   Extract content from any URL (smart auto-routing)
   novada_crawl     Crawl a website (BFS/DFS, up to 20 pages)
@@ -353,6 +369,7 @@ Tools (10):
   novada_verify    Verify a factual claim against web sources
   novada_unblock   Force JS rendering on blocked/SPA pages
   novada_browser   Interactive browser automation (navigate, click, type, screenshot)
+  novada_health    Check which Novada products are active on your API key
 `);
   process.exit(0);
 }

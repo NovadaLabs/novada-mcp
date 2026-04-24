@@ -102,7 +102,7 @@ export async function novadaScrape(params: ScrapeParams, apiKey: string): Promis
     const errorMessages: Record<number, string> = {
       10001: "Missing required parameters. Check platform and operation fields.",
       11000: "Invalid API key.",
-      11006: "Scraper access not enabled for this account. Contact support@novada.com to enable platform scrapers.",
+      11006: "Scraper API not yet activated on this account. Go to dashboard.novada.com/overview/scraper/ to activate instantly — no email needed.",
       11008: `Unknown platform '${platform}'. Use the exact domain (e.g. 'amazon.com', 'reddit.com').`,
     };
     const msg = errorMessages[apiResponse.code] ?? apiResponse.msg ?? "Unknown scraper error";

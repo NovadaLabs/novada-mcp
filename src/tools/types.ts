@@ -93,6 +93,14 @@ export const VerifyParamsSchema = z.object({
   context: z.string().optional().describe("Optional context to narrow the search (e.g. 'as of 2024', 'in the US')"),
 });
 
+// ─── Health Params ────────────────────────────────────────────────────────────
+
+export const HealthParamsSchema = z.object({});
+export type HealthParams = z.infer<typeof HealthParamsSchema>;
+export function validateHealthParams(args: Record<string, unknown> | undefined): HealthParams {
+  return HealthParamsSchema.parse(args ?? {});
+}
+
 // ─── Inferred Types ─────────────────────────────────────────────────────────
 
 export type SearchParams = z.infer<typeof SearchParamsSchema>;
@@ -274,6 +282,20 @@ const BrowserActionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("scroll"),
     direction: z.enum(["down", "up", "bottom", "top"]).default("down"),
+  }),
+  z.object({
+    action: z.literal("hover"),
+    selector: z.string().min(1).describe("CSS selector to hover over."),
+  }),
+  z.object({
+    action: z.literal("press_key"),
+    key: z.string().min(1).describe("Key to press. E.g. 'Enter', 'Tab', 'Escape', 'ArrowDown', 'Space'. Follows Playwright key names."),
+    selector: z.string().optional().describe("Optional CSS selector to focus before pressing the key."),
+  }),
+  z.object({
+    action: z.literal("select"),
+    selector: z.string().min(1).describe("CSS selector for the <select> element."),
+    value: z.string().min(1).describe("The option value (or label text) to select."),
   }),
   z.object({ action: z.literal("close_session") }),
   z.object({ action: z.literal("list_sessions") }),
