@@ -4,6 +4,24 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.8.3] — 2026-04-24
+
+### Added
+- **`novada_health` tool** (11th tool): instantly shows which Novada products are active on your API key. Runs parallel probes for Search, Web Unblocker, Scraper API, Proxy, and Browser API. Returns a markdown status table with activation links for anything not yet enabled — great for first-time setup and debugging.
+- **Browser action `hover`**: hover over a CSS selector (triggers CSS hover states, dropdown menus, tooltips).
+- **Browser action `press_key`**: press a keyboard key (Enter, Tab, Escape, ArrowDown, Space, etc.). Optional `selector` focuses an element first.
+- **Browser action `select`**: select a value from a `<select>` dropdown by value or label text.
+
+### Fixed
+- **Scraper API error 11006 message**: replaced dead-end "Contact support@novada.com" with a direct self-serve activation link — `dashboard.novada.com/overview/scraper/` — so users can unblock themselves without waiting for support.
+
+### Tests
+- 366 passing (was 351 in v0.8.2, +15 new tests)
+- New: 11 health tool tests (`tests/tools/health.test.ts`) — probes, masking, Next Steps section
+- New: 4 browser action tests for hover, press\_key (with/without selector), select
+
+---
+
 ## [0.8.2] — 2026-04-24
 
 ### Added

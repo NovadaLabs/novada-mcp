@@ -21,6 +21,10 @@ function createMockPage() {
     waitForTimeout: vi.fn().mockResolvedValue(undefined),
     setDefaultTimeout: vi.fn(),
     close: vi.fn().mockResolvedValue(undefined),
+    hover: vi.fn().mockResolvedValue(undefined),
+    focus: vi.fn().mockResolvedValue(undefined),
+    keyboard: { press: vi.fn().mockResolvedValue(undefined) },
+    selectOption: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -197,5 +201,70 @@ describe("novadaBrowser", () => {
 
     expect(result).toContain("Active Browser Sessions");
     expect(result).toContain("count:");
+  });
+});
+
+describe("new browser actions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const id of listSessions()) {
+      void closeSession(id);
+    }
+    process.env.NOVADA_BROWSER_WS = "wss://test:test@example.com";
+  });
+
+  it("hover: calls page.hover with selector and returns ok", async () => {
+    const mockPage = setupBrowserMock();
+
+    const result = await novadaBrowser({
+      actions: [{ action: "hover", selector: ".menu-item" }],
+      timeout: 60000,
+    });
+
+    expect(mockPage.hover).toHaveBeenCalledWith(".menu-item");
+    expect(result).toContain("hover [ok]");
+    expect(result).toContain(".menu-item");
+  });
+
+  it("press_key without selector: presses key and returns ok", async () => {
+    const mockPage = setupBrowserMock();
+
+    const result = await novadaBrowser({
+      actions: [{ action: "press_key", key: "Enter" }],
+      timeout: 60000,
+    });
+
+    expect(mockPage.keyboard.press).toHaveBeenCalledWith("Enter");
+    expect(mockPage.focus).not.toHaveBeenCalled();
+    expect(result).toContain("press_key [ok]");
+    expect(result).toContain("Pressed: Enter");
+  });
+
+  it("press_key with selector: focuses element then presses key", async () => {
+    const mockPage = setupBrowserMock();
+
+    const result = await novadaBrowser({
+      actions: [{ action: "press_key", key: "Tab", selector: "#input-field" }],
+      timeout: 60000,
+    });
+
+    expect(mockPage.focus).toHaveBeenCalledWith("#input-field");
+    expect(mockPage.keyboard.press).toHaveBeenCalledWith("Tab");
+    expect(result).toContain("press_key [ok]");
+    expect(result).toContain("focused: #input-field");
+  });
+
+  it("select: calls page.selectOption with selector and value, returns ok", async () => {
+    const mockPage = setupBrowserMock();
+
+    const result = await novadaBrowser({
+      actions: [{ action: "select", selector: "#country-dropdown", value: "us" }],
+      timeout: 60000,
+    });
+
+    expect(mockPage.selectOption).toHaveBeenCalledWith("#country-dropdown", "us");
+    expect(result).toContain("select [ok]");
+    expect(result).toContain("us");
+    expect(result).toContain("#country-dropdown");
   });
 });

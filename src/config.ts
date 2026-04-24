@@ -1,4 +1,4 @@
-export const VERSION = "0.8.1";
+export const VERSION = "0.8.3";
 
 // Scraper API — platform scraper endpoint (POST /request with Bearer token auth).
 // Only /request is live. /search (SERP) returns 404 — pending backend deployment.

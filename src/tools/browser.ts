@@ -260,6 +260,24 @@ async function executeAction(page: any, action: BrowserAction): Promise<ActionRe
       return { action: "scroll", status: "ok", data: `Scrolled ${dir}` };
     }
 
+    case "hover": {
+      await page.hover(action.selector);
+      return { action: "hover", status: "ok", data: `Hovered: ${action.selector}` };
+    }
+
+    case "press_key": {
+      if (action.selector) {
+        await page.focus(action.selector);
+      }
+      await page.keyboard.press(action.key);
+      return { action: "press_key", status: "ok", data: `Pressed: ${action.key}${action.selector ? ` (focused: ${action.selector})` : ""}` };
+    }
+
+    case "select": {
+      await page.selectOption(action.selector, action.value);
+      return { action: "select", status: "ok", data: `Selected "${action.value}" in: ${action.selector}` };
+    }
+
     case "close_session":
     case "list_sessions":
       // These are handled before reaching executeAction

@@ -161,7 +161,7 @@ describe("novadaScrape — error handling", () => {
     mockApiError(11006, "Scraper error");
     await expect(
       novadaScrape({ platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 }, "test-key")
-    ).rejects.toThrow("Scraper access not enabled");
+    ).rejects.toThrow("Scraper API not yet activated");
   });
 
   it("throws with actionable message for code 11008 (bad platform name)", async () => {
