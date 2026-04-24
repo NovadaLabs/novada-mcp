@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
-import { SCRAPER_API_BASE, WEB_UNBLOCKER_BASE, JS_DETECTION_THRESHOLD } from "../config.js";
+import { WEB_UNBLOCKER_BASE, JS_DETECTION_THRESHOLD, TIMEOUTS } from "../config.js";
+import { getProxyCredentials, getWebUnblockerKey } from "./credentials.js";
 
 export const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
@@ -19,9 +20,18 @@ export async function fetchWithRetry(
         headers: { "User-Agent": USER_AGENT },
         timeout: 30000,
         maxRedirects: 5,
+        maxContentLength: 10 * 1024 * 1024, // 10MB cap — prevents OOM on huge pages
+        maxBodyLength: 10 * 1024 * 1024,
         ...options,
       });
     } catch (error) {
+      // Intercept 10MB cap violation and surface an actionable error
+      if (error instanceof AxiosError && error.message?.toLowerCase().includes("maxcontentlength")) {
+        throw new Error(
+          `Response from ${url} exceeds the 10MB content limit. This is usually a binary file, a very large page, or a misconfigured server. ` +
+          "Try a more specific subpage URL, or use novada_map to find the exact page you need."
+        );
+      }
       if (attempt === retries) throw error;
       const isRetryable =
         error instanceof AxiosError &&
@@ -37,42 +47,117 @@ export async function fetchWithRetry(
 }
 
 /**
- * Fetch a URL through Novada Scraper API (generic web fetch, no JS rendering).
- * Endpoint: scraper.novada.com — uses NOVADA_API_KEY.
+ * Fetch a URL through Novada Residential Proxy (generic web fetch, no JS rendering).
+ * Uses NOVADA_PROXY_USER / NOVADA_PROXY_PASS / NOVADA_PROXY_ENDPOINT env vars.
+ * Falls back to direct fetch if proxy env vars are not set.
+ *
+ * Note: _apiKey param is kept for interface compatibility but unused.
+ * For JS-rendered pages use fetchWithRender; for platform scrapers use the /request endpoint.
  */
-// Session-level circuit breaker: skip Scraper API proxy once we know it's unavailable
-let scraperProxyAvailable: boolean | null = null;
+// Session-level circuit breaker: skip proxy once we know it's unavailable this session.
+// Auto-resets after PROXY_CIRCUIT_RESET_MS to recover from transient failures.
+// Keyed by proxy endpoint so multiple SDK clients with different proxy credentials
+// do not interfere with each other's circuit state.
+interface CircuitState {
+  available: boolean | null;
+  disabledAt: number | null;
+}
+const proxyCircuits = new Map<string, CircuitState>();
+const PROXY_CIRCUIT_RESET_MS = 5 * 60 * 1000; // 5 minutes
+
+function getCircuit(endpoint: string): CircuitState {
+  let state = proxyCircuits.get(endpoint);
+  if (!state) {
+    state = { available: null, disabledAt: null };
+    proxyCircuits.set(endpoint, state);
+  }
+  return state;
+}
 
 export async function fetchViaProxy(
   url: string,
-  apiKey: string | undefined,
+  _apiKey: string | undefined,
   options: Partial<AxiosRequestConfig> = {}
 ): Promise<AxiosResponse> {
-  if (apiKey && scraperProxyAvailable !== false) {
-    const proxyParams = new URLSearchParams({ api_key: apiKey, url });
-    const proxyUrl = `${SCRAPER_API_BASE}?${proxyParams.toString()}`;
+  // Credentials: SDK-scoped (via AsyncLocalStorage) > NOVADA_PROXY_* env vars
+  const proxyCreds = getProxyCredentials();
+  const proxyUser = proxyCreds?.user;
+  const proxyPass = proxyCreds?.pass;
+  const proxyEndpoint = proxyCreds?.endpoint;
 
-    if (scraperProxyAvailable === true) {
-      // Known-good: use proxy directly
-      return fetchWithRetry(proxyUrl, { headers: { "User-Agent": USER_AGENT }, timeout: 45000, ...options });
+  if (proxyUser && proxyPass && proxyEndpoint) {
+    const circuit = getCircuit(proxyEndpoint);
+
+    // Auto-reset circuit breaker after TTL (recovers from transient failures)
+    if (circuit.available === false && circuit.disabledAt !== null && Date.now() - circuit.disabledAt > PROXY_CIRCUIT_RESET_MS) {
+      circuit.available = null;
+      circuit.disabledAt = null;
     }
 
-    // Unknown state: race proxy vs direct fetch — take the first successful response
-    const proxyFetch = fetchWithRetry(proxyUrl, { headers: { "User-Agent": USER_AGENT }, timeout: 45000, ...options })
-      .then(r => { scraperProxyAvailable = true; return r; })
+    if (circuit.available === false) {
+      return fetchWithRetry(url, options);
+    }
+
+    const [proxyHost, proxyPortStr] = proxyEndpoint.split(":");
+    const proxyPort = parseInt(proxyPortStr ?? "7777", 10);
+    const proxyConfig = {
+      host: proxyHost,
+      port: proxyPort,
+      auth: { username: proxyUser, password: proxyPass },
+      protocol: "http",
+    };
+
+    if (circuit.available === true) {
+      // Known-good: use proxy directly
+      return fetchWithRetry(url, { headers: { "User-Agent": USER_AGENT }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...options });
+    }
+
+    // Unknown state: race proxy vs direct fetch — take the first successful response.
+    // Probe proxy with 0 retries: a single failure is enough to mark circuit open and
+    // fall back to direct without burning 3 retries × exponential backoff (~7s).
+    const proxyProbeOptions = { headers: { "User-Agent": USER_AGENT }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...options };
+    const proxyFetch: Promise<AxiosResponse | null> = fetchWithRetry(url, proxyProbeOptions, 0)
+      .then(r => { circuit.available = true; return r; })
       .catch((error: unknown) => {
-        if (error instanceof AxiosError && (error.response?.status === 401 || error.response?.status === 403)) {
-          throw error; // Auth failure — surface it, don't fall back
+        if (error instanceof AxiosError) {
+          const status = error.response?.status;
+          if (status === 407) {
+            throw new Error(
+              "Proxy authentication failed (HTTP 407). " +
+              "Verify NOVADA_PROXY_USER and NOVADA_PROXY_PASS are correct. " +
+              "Get credentials at: https://dashboard.novada.com → Residential Proxies → Endpoint Generator"
+            );
+          }
+          if (status === 401 || status === 403) {
+            throw error; // Auth failure — surface it, don't fall back
+          }
         }
-        scraperProxyAvailable = false;
-        return null;
+        circuit.available = false;
+        circuit.disabledAt = Date.now();
+        return null; // signal: proxy unavailable, caller will use directFetch result
       });
 
-    const directFetch = fetchWithRetry(url, options);
+    const directFetch = fetchWithRetry(url, options).catch((err: unknown) => {
+      throw Object.assign(
+        new Error(`Direct fetch failed: ${err instanceof Error ? err.message : String(err)}. Proxy circuit: ${circuit.available === false ? "open (disabled)" : "unknown"}`),
+        { cause: err }
+      );
+    });
 
-    // Await both; return proxy result if it succeeded, otherwise direct
-    const [proxyResult, directResult] = await Promise.all([proxyFetch, directFetch]);
-    return (proxyResult ?? directResult) as AxiosResponse;
+    // Use Promise.any semantics: whichever non-null result arrives first wins.
+    // This lets directFetch resolve immediately if proxy fails fast (e.g., parse error),
+    // without waiting for proxy to finish its full timeout window.
+    const result = await Promise.any([
+      proxyFetch.then(r => { if (r === null) throw new Error("proxy-unavailable"); return r; }),
+      directFetch,
+    ]).catch(async () => {
+      // Both failed — last resort: return whatever we have (proxy null + direct error surfaced)
+      const [proxyResult, directResult] = await Promise.allSettled([proxyFetch, directFetch]);
+      if (proxyResult.status === "fulfilled" && proxyResult.value !== null) return proxyResult.value;
+      if (directResult.status === "fulfilled") return directResult.value;
+      throw directResult.status === "rejected" ? directResult.reason : new Error("All fetch paths failed");
+    });
+    return result as AxiosResponse;
   }
   return fetchWithRetry(url, options);
 }
@@ -85,22 +170,25 @@ export async function fetchViaProxy(
 export async function fetchWithRender(
   url: string,
   scraperApiKey: string | undefined,
-  options: Partial<AxiosRequestConfig> = {}
+  options: Partial<AxiosRequestConfig> & { country?: string } = {}
 ): Promise<AxiosResponse> {
-  const unblockerKey = process.env.NOVADA_WEB_UNBLOCKER_KEY;
+  const unblockerKey = getWebUnblockerKey();
+  const { country, ...axiosOptions } = options;
 
   if (unblockerKey) {
     try {
       const resp = await axios.post(
         `${WEB_UNBLOCKER_BASE}/request`,
-        { target_url: url, response_format: "html", js_render: true, country: "" },
+        { target_url: url, response_format: "html", js_render: true, country: country ?? "" },
         {
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${unblockerKey}`,
           },
-          timeout: 60000,
-          ...options,
+          timeout: TIMEOUTS.RENDER,
+          maxContentLength: 10 * 1024 * 1024, // 10MB cap — prevents OOM on huge pages
+          maxBodyLength: 10 * 1024 * 1024,
+          ...axiosOptions,
         }
       );
       // Response format: { code: 0, data: { code: 200, html: "...", msg, msg_detail } }
@@ -112,17 +200,22 @@ export async function fetchWithRender(
       }
       return resp;
     } catch (error) {
-      if (
-        error instanceof AxiosError &&
-        (error.response?.status === 401 || error.response?.status === 403)
-      ) {
-        throw error;
+      // Intercept 10MB cap violation for POST path and surface an actionable error
+      if (error instanceof AxiosError && error.message?.toLowerCase().includes("maxcontentlength")) {
+        throw new Error(
+          `Web Unblocker response from ${url} exceeds the 10MB content limit. ` +
+          "The rendered page may contain large embedded assets. Try a more specific subpage URL."
+        );
       }
+      // Always re-throw — callers handle escalation logic and mode tracking.
+      // Silently falling back to proxy would give callers a static result while
+      // they believe they have a JS-rendered page (wrong mode metadata).
+      throw error;
     }
   }
 
-  // Fallback: scraper API without render (best effort)
-  return fetchViaProxy(url, scraperApiKey, options);
+  // Fallback: no unblocker key configured — use proxy/direct fetch (best effort)
+  return fetchViaProxy(url, scraperApiKey, axiosOptions);
 }
 
 /** Detect if fetched HTML is a JS-required page (empty shell, Cloudflare, etc.) */
@@ -144,6 +237,12 @@ export function detectJsHeavyContent(html: string): boolean {
     "loading...</p>",
     'id="root"></div>',
     'id="app"></div>',
+    // Single-quote variants emitted by React, Vue, and Angular scaffolds
+    "id='root'></div>",
+    "id='app'></div>",
+    // Angular universal / Next.js hydration targets
+    'id="__next"></div>',
+    "id='__next'></div>",
   ];
 
   return jsSignals.some(signal => lower.includes(signal));
@@ -174,7 +273,8 @@ export function detectBotChallenge(html: string): boolean {
     "_incap_",
     "please wait while we verify",
     "human verification",
-    "access denied",
+    // "access denied" removed — too broad: appears in legitimate AWS S3, CDN, and error pages.
+    // Rely on stronger heuristic signals below instead.
   ];
 
   for (const signal of knownChallengeStrings) {

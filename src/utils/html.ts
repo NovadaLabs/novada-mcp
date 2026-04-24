@@ -322,8 +322,7 @@ function extractFields(type: string, obj: Record<string, any>): Record<string, s
     set("description", obj.description);
     set("publisher", obj.publisher?.name ?? obj.publisher);
     if (obj.articleBody) {
-      const body = coerceToString(obj.articleBody) ?? "";
-      fields.articleBody = body.length > 500 ? body.slice(0, 500) : body;
+      fields.articleBody = coerceToString(obj.articleBody) ?? "";
     }
   } else if (type === "Event") {
     set("name", obj.name);
@@ -564,5 +563,5 @@ export function extractLinks(html: string, baseUrl?: string): string[] {
     }
   });
 
-  return [...navLinks, ...bodyLinks].slice(0, 50);
+  return [...navLinks, ...bodyLinks];
 }

@@ -1,4 +1,6 @@
 export { fetchWithRetry, fetchViaProxy, fetchWithRender, detectJsHeavyContent, detectBotChallenge, USER_AGENT } from "./http.js";
+export { withCredentials, getWebUnblockerKey, getBrowserWs, getProxyCredentials } from "./credentials.js";
+export type { ToolCredentials } from "./credentials.js";
 export { normalizeUrl, isContentLink } from "./url.js";
 export { extractMainContent, extractTitle, extractDescription, extractLinks, extractStructuredData, scoreExtraction } from "./html.js";
 export type { StructuredData, ExtractionQuality } from "./html.js";

@@ -48,11 +48,11 @@ describe("extractLinks", () => {
     expect(links).toHaveLength(1);
   });
 
-  it("limits to 50 links", () => {
+  it("returns all links without cap", () => {
     const anchors = Array.from({ length: 100 }, (_, i) => `<a href="https://example.com/p${i}">P${i}</a>`).join("");
     const html = `<html><body>${anchors}</body></html>`;
     const links = extractLinks(html);
-    expect(links.length).toBeLessThanOrEqual(50);
+    expect(links.length).toBe(100);
   });
 
   it("returns empty array for empty HTML", () => {

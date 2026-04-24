@@ -1,5 +1,6 @@
 import { fetchViaProxy, extractLinks, normalizeUrl, isContentLink } from "../utils/index.js";
 import type { MapParams } from "./types.js";
+import { TIMEOUTS } from "../config.js";
 
 /**
  * Map a website to discover all URLs on the site.
@@ -101,7 +102,7 @@ async function discoverViaSitemap(
   const sitemapCandidates: string[] = [];
 
   try {
-    const robotsResp = await fetchViaProxy(`${origin}/robots.txt`, apiKey, { timeout: 8000 });
+    const robotsResp = await fetchViaProxy(`${origin}/robots.txt`, apiKey, { timeout: TIMEOUTS.SITEMAP });
     if (typeof robotsResp.data === "string") {
       const sitemapMatches = robotsResp.data.match(/^Sitemap:\s*(.+)$/gim);
       if (sitemapMatches) {
@@ -120,7 +121,7 @@ async function discoverViaSitemap(
   for (const sitemapUrl of sitemapCandidates.slice(0, 3)) {
     if (urls.length >= maxUrls) break;
     try {
-      const resp = await fetchViaProxy(sitemapUrl, apiKey, { timeout: 10000 });
+      const resp = await fetchViaProxy(sitemapUrl, apiKey, { timeout: TIMEOUTS.CRAWL_STATIC });
       if (typeof resp.data !== "string") continue;
       const xml = resp.data;
       if (!xml.includes("<urlset") && !xml.includes("<sitemapindex")) continue;
@@ -133,7 +134,7 @@ async function discoverViaSitemap(
         for (const childUrl of childSitemaps.slice(0, 5)) {
           if (urls.length >= maxUrls) break;
           try {
-            const childResp = await fetchViaProxy(childUrl, apiKey, { timeout: 8000 });
+            const childResp = await fetchViaProxy(childUrl, apiKey, { timeout: TIMEOUTS.SITEMAP });
             if (typeof childResp.data === "string") {
               extractSitemapUrls(childResp.data, urls, maxUrls);
             }
@@ -193,7 +194,7 @@ async function parallelBfsCrawl(
     const results = await Promise.allSettled(
       unvisited.map(async ({ url, depth }) => {
         if (depth >= maxDepth) return { links: [] };
-        const response = await fetchViaProxy(url, apiKey, { timeout: 10000 });
+        const response = await fetchViaProxy(url, apiKey, { timeout: TIMEOUTS.CRAWL_STATIC });
         if (typeof response.data !== "string") return { links: [] };
         return { links: extractLinks(response.data, url), depth };
       })

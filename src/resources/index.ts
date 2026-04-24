@@ -39,7 +39,7 @@ export const RESOURCES: Resource[] = [
   {
     uri: "novada://guide",
     name: "Agent Tool Selection Guide",
-    description: "Decision tree and workflow patterns for choosing between all 7 novada tools: search, extract, crawl, map, research, proxy, scrape",
+    description: "Decision tree and workflow patterns for choosing between all 10 novada tools: search, extract, crawl, map, research, proxy, scrape, verify, unblock, browser",
     mimeType: "text/plain",
   },
 ];
@@ -139,17 +139,29 @@ You need structured data from a known platform (Amazon, Reddit, TikTok…)?
 You need to route your own HTTP requests through a residential IP?
   → novada_proxy
 
+You need to fact-check whether a claim is true or false?
+  → novada_verify
+
+You have a URL blocked by anti-bot protection and need JS-rendered content directly?
+  → novada_unblock (or novada_extract with render="render" — same backend, unblock is dedicated)
+
+You need to interact with a page (click buttons, fill forms, navigate, screenshot)?
+  → novada_browser
+
 ## Tool Comparison
 
-| Tool            | Use when you have…          | Output              | Token cost |
-|-----------------|-----------------------------|---------------------|------------|
-| novada_search   | a question, no URL          | URL list + snippets | Low        |
-| novada_extract  | a URL (or list of URLs)     | Full page content   | Medium-High|
-| novada_map      | a domain, need URL list     | URL list only       | Low        |
-| novada_crawl    | a domain, need N pages      | Content of N pages  | High       |
-| novada_research | a complex question          | Cited report        | Medium     |
-| novada_scrape   | a supported platform        | Structured records  | Medium     |
-| novada_proxy    | need residential IP routing | Proxy config        | Minimal    |
+| Tool            | Use when you have…                | Output                  | Token cost |
+|-----------------|-----------------------------------|-------------------------|------------|
+| novada_search   | a question, no URL                | URL list + snippets     | Low        |
+| novada_extract  | a URL (or list of URLs)           | Full page content       | Medium-High|
+| novada_map      | a domain, need URL list           | URL list only           | Low        |
+| novada_crawl    | a domain, need N pages            | Content of N pages      | High       |
+| novada_research | a complex question                | Cited report            | Medium     |
+| novada_scrape   | a supported platform              | Structured records      | Medium     |
+| novada_proxy    | need residential IP routing       | Proxy config string     | Minimal    |
+| novada_verify   | a factual claim to check          | Verdict + evidence URLs | Medium     |
+| novada_unblock  | a URL blocked by anti-bot         | JS-rendered content     | Medium-High|
+| novada_browser  | interactive page actions          | Action result           | High       |
 
 ## Efficient Workflow Patterns
 

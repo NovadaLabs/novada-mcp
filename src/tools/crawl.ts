@@ -1,5 +1,6 @@
 import { fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractLinks, normalizeUrl, isContentLink, detectJsHeavyContent } from "../utils/index.js";
 import type { CrawlParams } from "./types.js";
+import { TIMEOUTS } from "../config.js";
 
 const CRAWL_CONCURRENCY = 3;
 
@@ -18,8 +19,8 @@ async function fetchPage(
 ): Promise<{ html: string; url: string } | null> {
   try {
     const response = useRender
-      ? await fetchWithRender(url, apiKey, { timeout: 60000, maxRedirects: 3 })
-      : await fetchViaProxy(url, apiKey, { timeout: 15000, maxRedirects: 3 });
+      ? await fetchWithRender(url, apiKey, { timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 })
+      : await fetchViaProxy(url, apiKey, { timeout: TIMEOUTS.CRAWL_STATIC, maxRedirects: 3 });
     if (typeof response.data !== "string") return null;
     return { html: String(response.data), url };
   } catch {

@@ -45,12 +45,12 @@ function scoreResult<T extends { title?: string; description?: string; snippet?:
   for (const term of terms) {
     // Title matches weighted 3x (exact word boundary) + 2x (substring)
     const titleWordCount = (title.match(new RegExp(`\\b${escapeRegex(term)}\\b`, "g")) || []).length;
-    const titleSubCount = (title.split(term).length - 1) - titleWordCount;
+    const titleSubCount = Math.max(0, (title.split(term).length - 1) - titleWordCount);
     score += titleWordCount * 3 + titleSubCount * 2;
 
     // Snippet matches weighted 1x (word boundary) + 0.5x (substring)
     const snippetWordCount = (snippet.match(new RegExp(`\\b${escapeRegex(term)}\\b`, "g")) || []).length;
-    const snippetSubCount = (snippet.split(term).length - 1) - snippetWordCount;
+    const snippetSubCount = Math.max(0, (snippet.split(term).length - 1) - snippetWordCount);
     score += snippetWordCount * 1 + snippetSubCount * 0.5;
   }
 

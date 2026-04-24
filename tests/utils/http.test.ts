@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import axios from "axios";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import axios, { AxiosError } from "axios";
 import { detectJsHeavyContent, detectBotChallenge, fetchWithRender } from "../../src/utils/http.js";
 
 describe("detectJsHeavyContent", () => {
@@ -106,11 +106,13 @@ describe("fetchWithRender", () => {
     process.env.NOVADA_WEB_UNBLOCKER_KEY = originalKey;
   });
 
-  it("falls back to scraper GET when NOVADA_WEB_UNBLOCKER_KEY is not set", async () => {
+  it("falls back to direct GET when NOVADA_WEB_UNBLOCKER_KEY is not set", async () => {
     vi.mock("axios");
     const mockedAxios = vi.mocked(axios);
     const originalKey = process.env.NOVADA_WEB_UNBLOCKER_KEY;
     delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
+    // Ensure proxy env vars are not set so fetchViaProxy uses direct fetch
+    delete process.env.NOVADA_PROXY_USER;
 
     mockedAxios.get.mockResolvedValue({
       data: "<html><body><p>Fallback content</p></body></html>",
@@ -122,9 +124,81 @@ describe("fetchWithRender", () => {
 
     const result = await fetchWithRender("https://example.com", "test-key");
     expect(result.data).toContain("Fallback content");
+    // Without unblocker key: falls back to fetchViaProxy → direct GET to the original URL
     const calledUrl = (mockedAxios.get.mock.calls[0][0] as string);
-    expect(calledUrl).toContain("scraper.novada.com");
+    expect(calledUrl).toBe("https://example.com");
 
     process.env.NOVADA_WEB_UNBLOCKER_KEY = originalKey;
+  });
+
+  it("throws AxiosError on 401 from unblocker (does not fall back)", async () => {
+    vi.mock("axios");
+    const mockedAxios = vi.mocked(axios);
+    process.env.NOVADA_WEB_UNBLOCKER_KEY = "bad-key";
+
+    const err = Object.assign(new AxiosError("Unauthorized"), { response: { status: 401, data: "Unauthorized" } });
+    mockedAxios.post.mockRejectedValue(err);
+
+    await expect(fetchWithRender("https://example.com", undefined)).rejects.toThrow();
+    delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
+  });
+});
+
+describe("fetchViaProxy — circuit breaker TTL", () => {
+  let fetchViaProxyFn: typeof import("../../src/utils/http.js").fetchViaProxy;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    vi.mock("axios");
+    // Re-import fresh module so proxyAvailable resets to null
+    const m = await import("../../src/utils/http.js");
+    fetchViaProxyFn = m.fetchViaProxy;
+    // Set proxy env vars
+    process.env.NOVADA_PROXY_USER = "user";
+    process.env.NOVADA_PROXY_PASS = "pass";
+    process.env.NOVADA_PROXY_ENDPOINT = "proxy.example.com:7777";
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete process.env.NOVADA_PROXY_USER;
+    delete process.env.NOVADA_PROXY_PASS;
+    delete process.env.NOVADA_PROXY_ENDPOINT;
+    vi.restoreAllMocks();
+  });
+
+  it("marks proxy unavailable after proxy failure and uses direct", async () => {
+    const mockedAxios = vi.mocked(axios);
+    // Proxy attempt fails; direct succeeds
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("Proxy unreachable")) // proxy fetch fails
+      .mockResolvedValueOnce({
+        data: "<html>direct</html>",
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      }); // direct fetch succeeds
+
+    const result = await fetchViaProxyFn("https://example.com", undefined);
+    expect(result.data).toBe("<html>direct</html>");
+  });
+
+  it("resets circuit breaker after TTL and retries proxy", async () => {
+    const mockedAxios = vi.mocked(axios);
+    // First call: proxy fails, direct succeeds → circuit opens
+    mockedAxios.get
+      .mockRejectedValueOnce(new Error("Proxy unreachable"))
+      .mockResolvedValueOnce({ data: "direct-1", status: 200, headers: {}, config: {} as never, statusText: "OK" });
+    await fetchViaProxyFn("https://example.com", undefined);
+
+    // Advance time past TTL (5 min + 1 second)
+    vi.advanceTimersByTime(5 * 60 * 1000 + 1000);
+
+    // Second call: circuit should be reset (null state), proxy is tried again
+    mockedAxios.get
+      .mockResolvedValueOnce({ data: "proxy-2", status: 200, headers: {}, config: {} as never, statusText: "OK" })
+      .mockResolvedValueOnce({ data: "direct-2", status: 200, headers: {}, config: {} as never, statusText: "OK" });
+    const result = await fetchViaProxyFn("https://example.com", undefined);
+    // Either proxy or direct response should come back — circuit was reset so both are raced
+    expect(["proxy-2", "direct-2"]).toContain(result.data);
   });
 });

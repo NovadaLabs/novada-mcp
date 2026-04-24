@@ -1,5 +1,5 @@
 import axios, { AxiosError } from "axios";
-import { SCRAPER_API_BASE } from "../config.js";
+import { SCRAPER_API_BASE, EXCEL_MAX_SHEET_NAME } from "../config.js";
 import { formatAsMarkdown, formatAsCsv, formatAsHtml, formatAsXlsx } from "../utils/format.js";
 import type { ScrapeParams } from "./types.js";
 
@@ -45,12 +45,15 @@ function flattenRecord(obj: unknown, prefix = ""): Record<string, string> {
       Object.assign(result, flattenRecord(v, key));
     } else if (Array.isArray(v)) {
       if (v.length > 0 && typeof v[0] === "object" && v[0] !== null) {
-        // Array of objects — flatten each element with indexed keys
-        v.slice(0, 5).forEach((item, idx) => {
+        // Array of objects — flatten first 5; add truncation hint if more exist
+        const cap = 5;
+        v.slice(0, cap).forEach((item, idx) => {
           Object.assign(result, flattenRecord(item, `${key}.${idx}`));
         });
+        if (v.length > cap) result[`${key}._count`] = `${v.length} total (showing first ${cap})`;
       } else {
-        result[key] = v.map(x => String(x ?? "")).join("; ").slice(0, 200);
+        const joined = v.map(x => String(x ?? "")).join("; ");
+        result[key] = joined.length > 200 ? joined.slice(0, 200) + "...(truncated)" : joined;
       }
     } else {
       result[key] = String(v ?? "");
@@ -140,7 +143,7 @@ export async function novadaScrape(params: ScrapeParams, apiKey: string): Promis
       return formatAsHtml(records, title);
 
     case "xlsx": {
-      const buf = formatAsXlsx(records, operation.slice(0, 31));
+      const buf = await formatAsXlsx(records, operation.slice(0, EXCEL_MAX_SHEET_NAME));
       const b64 = buf.toString("base64");
       return [
         `## Scrape Results`,

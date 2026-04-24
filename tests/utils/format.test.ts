@@ -45,14 +45,14 @@ describe("formatAsHtml", () => {
 });
 
 describe("formatAsXlsx", () => {
-  it("returns a non-empty Buffer", () => {
-    const buf = formatAsXlsx(SAMPLE);
+  it("returns a non-empty Buffer", async () => {
+    const buf = await formatAsXlsx(SAMPLE);
     expect(Buffer.isBuffer(buf)).toBe(true);
     expect(buf.length).toBeGreaterThan(0);
   });
 
-  it("produces valid xlsx magic bytes (PK zip header)", () => {
-    const buf = formatAsXlsx(SAMPLE);
+  it("produces valid xlsx magic bytes (PK zip header)", async () => {
+    const buf = await formatAsXlsx(SAMPLE);
     // xlsx is a zip file — magic bytes 50 4B 03 04
     expect(buf[0]).toBe(0x50);
     expect(buf[1]).toBe(0x4b);
@@ -87,36 +87,36 @@ describe("formatAsMarkdown", () => {
 });
 
 describe("formatRecords", () => {
-  it("json format returns JSON string with correct mimeType", () => {
-    const { content, mimeType, ext } = formatRecords(SAMPLE, "json");
+  it("json format returns JSON string with correct mimeType", async () => {
+    const { content, mimeType, ext } = await formatRecords(SAMPLE, "json");
     expect(mimeType).toBe("application/json");
     expect(ext).toBe("json");
     const parsed = JSON.parse(content as string);
     expect(parsed).toHaveLength(2);
   });
 
-  it("csv format returns csv content", () => {
-    const { content, mimeType, ext } = formatRecords(SAMPLE, "csv");
+  it("csv format returns csv content", async () => {
+    const { content, mimeType, ext } = await formatRecords(SAMPLE, "csv");
     expect(mimeType).toBe("text/csv");
     expect(ext).toBe("csv");
     expect(content as string).toContain("name,price,rating");
   });
 
-  it("html format returns html content", () => {
-    const { content, mimeType, ext } = formatRecords(SAMPLE, "html", { title: "Test" });
+  it("html format returns html content", async () => {
+    const { content, mimeType, ext } = await formatRecords(SAMPLE, "html", { title: "Test" });
     expect(mimeType).toBe("text/html");
     expect(ext).toBe("html");
     expect(content as string).toContain("<table>");
   });
 
-  it("xlsx format returns Buffer", () => {
-    const { content, ext } = formatRecords(SAMPLE, "xlsx");
+  it("xlsx format returns Buffer", async () => {
+    const { content, ext } = await formatRecords(SAMPLE, "xlsx");
     expect(ext).toBe("xlsx");
     expect(Buffer.isBuffer(content)).toBe(true);
   });
 
-  it("markdown format is the default", () => {
-    const { content, mimeType } = formatRecords(SAMPLE, "markdown");
+  it("markdown format is the default", async () => {
+    const { content, mimeType } = await formatRecords(SAMPLE, "markdown");
     expect(mimeType).toBe("text/markdown");
     expect(content as string).toContain("|");
   });

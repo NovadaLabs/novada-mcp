@@ -3,7 +3,7 @@ import { z } from "zod";
 // ─── URL Safety ─────────────────────────────────────────────────────────────
 
 /** Only allow HTTP/HTTPS URLs — block file://, ftp://, gopher://, internal IPs */
-const BLOCKED_HOSTS = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|\[::1\])$/i;
+const BLOCKED_HOSTS = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|0\.0\.0\.0|\[::1\]|\[::ffff:[^\]]+\]|\[fe80:[^\]]*\]|\[0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,4}:0{0,1}1\])$/i;
 
 const safeUrl = z.string()
   .url("A valid URL is required")
@@ -17,6 +17,10 @@ const safeUrl = z.string()
       catch { return false; }
     },
     "URLs pointing to localhost or private network ranges are not allowed"
+  )
+  .refine(
+    (url) => !url.includes("\n") && !url.includes("\r"),
+    "URL must not contain newline characters"
   );
 
 // ─── Zod Schemas ────────────────────────────────────────────────────────────

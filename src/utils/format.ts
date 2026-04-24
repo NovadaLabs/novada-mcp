@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 export type OutputFormat = "markdown" | "json" | "csv" | "html" | "xlsx";
 
@@ -61,11 +61,21 @@ export function formatAsHtml(records: Record<string, unknown>[], title?: string)
 }
 
 /** Convert records to XLSX buffer */
-export function formatAsXlsx(records: Record<string, unknown>[], sheetName = "Data"): Buffer {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(records);
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+export async function formatAsXlsx(records: Record<string, unknown>[], sheetName = "Data"): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet(sheetName);
+
+  if (records.length > 0) {
+    const headers = Object.keys(records[0]);
+    ws.columns = headers.map(h => ({ header: h, key: h, width: Math.min(Math.max(h.length + 2, 12), 40) }));
+    for (const record of records) {
+      ws.addRow(record);
+    }
+    // Bold header row
+    ws.getRow(1).font = { bold: true };
+  }
+
+  const buf = await wb.xlsx.writeBuffer();
   return Buffer.from(buf);
 }
 
@@ -90,11 +100,11 @@ export function formatAsMarkdown(records: Record<string, unknown>[], maxCellLen 
  * Format structured records into the requested output format.
  * Returns { content: string | Buffer, mimeType: string }
  */
-export function formatRecords(
+export async function formatRecords(
   records: Record<string, unknown>[],
   format: OutputFormat,
   options: { title?: string; sheetName?: string } = {}
-): { content: string | Buffer; mimeType: string; ext: string } {
+): Promise<{ content: string | Buffer; mimeType: string; ext: string }> {
   switch (format) {
     case "json":
       return { content: JSON.stringify(records, null, 2), mimeType: "application/json", ext: "json" };
@@ -103,7 +113,7 @@ export function formatRecords(
     case "html":
       return { content: formatAsHtml(records, options.title), mimeType: "text/html", ext: "html" };
     case "xlsx":
-      return { content: formatAsXlsx(records, options.sheetName), mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ext: "xlsx" };
+      return { content: await formatAsXlsx(records, options.sheetName), mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ext: "xlsx" };
     case "markdown":
     default:
       return { content: formatAsMarkdown(records), mimeType: "text/markdown", ext: "md" };

@@ -1,4 +1,5 @@
 import type { ProxyParams } from "./types.js";
+import { getProxyCredentials } from "../utils/credentials.js";
 
 /**
  * Build Novada proxy username with targeting options.
@@ -28,9 +29,10 @@ const TYPE_LABELS: Record<string, string> = {
  * bypass geo-restrictions, or maintain IP consistency across a session.
  */
 export async function novadaProxy(params: ProxyParams): Promise<string> {
-  const proxyUser = process.env.NOVADA_PROXY_USER;
-  const proxyPass = process.env.NOVADA_PROXY_PASS;
-  const proxyEndpoint = process.env.NOVADA_PROXY_ENDPOINT;
+  const proxyCreds = getProxyCredentials();
+  const proxyUser = proxyCreds?.user;
+  const proxyPass = proxyCreds?.pass;
+  const proxyEndpoint = proxyCreds?.endpoint;
 
   if (!proxyUser || !proxyPass || !proxyEndpoint) {
     const missing = [
@@ -65,13 +67,18 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
   const proxyUrl = `http://${encodedUser}:${encodedPass}@${proxyEndpoint}`;
   const typeLabel = TYPE_LABELS[params.type] ?? params.type;
 
+  const maskedUrl = `http://${encodedUser}:***@${proxyEndpoint}`;
+  const [host, port] = proxyEndpoint.split(":");
+
   if (params.format === "env") {
     return [
       `## Proxy Configuration (Shell Environment)`,
       `type: ${typeLabel}`,
       params.country ? `targeting: ${params.country.toUpperCase()}${params.city ? ` / ${params.city}` : ""}` : "",
       params.session_id ? `session: ${params.session_id} (sticky IP)` : "",
+      `proxy_url: ${maskedUrl}`,
       ``,
+      `# Copy these lines to your shell (contains credentials):`,
       `export HTTP_PROXY="${proxyUrl}"`,
       `export HTTPS_PROXY="${proxyUrl}"`,
       `export http_proxy="${proxyUrl}"`,
@@ -87,7 +94,9 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
     return [
       `## Proxy Configuration (curl)`,
       `type: ${typeLabel}`,
+      `proxy_url: ${maskedUrl}`,
       ``,
+      `# Full command (contains credentials):`,
       `curl --proxy "${proxyUrl}" <your-url>`,
       ``,
       `## Agent Hints`,
@@ -97,25 +106,24 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
   }
 
   // Default: url format
-  const [host, port] = proxyEndpoint.split(":");
   return [
     `## Proxy Configuration`,
     `type: ${typeLabel}`,
     params.country ? `targeting: ${params.country.toUpperCase()}${params.city ? ` / ${params.city}` : ""}` : "",
     params.session_id ? `session: ${params.session_id} (sticky IP)` : "session: rotating (new IP per request)",
-    ``,
-    `proxy_url: ${proxyUrl}`,
+    `proxy_url: ${maskedUrl}`,
     ``,
     `## Usage Examples`,
     ``,
     `Node.js (axios):`,
-    `  proxy: { host: "${host}", port: ${port || 7777}, auth: { username: "${username}", password: "***" } }`,
+    `  proxy: { host: "${host}", port: ${port || 7777}, auth: { username: "${username}", password: "<NOVADA_PROXY_PASS>" } }`,
     ``,
     `Python (requests):`,
-    `  proxies = { "http": "${proxyUrl}", "https": "${proxyUrl}" }`,
+    `  proxies = { "http": "${maskedUrl}", "https": "${maskedUrl}" }`,
+    `  # Replace *** with the value of NOVADA_PROXY_PASS`,
     ``,
     `## Agent Hints`,
-    `- Use this proxy_url in your HTTP client's proxy configuration.`,
+    `- proxy_url above shows *** for the password — read NOVADA_PROXY_PASS from your environment to complete it.`,
     `- For consistent IP across a workflow, set session_id (e.g. "my-session-1").`,
     `- For web extraction tasks, novada_extract handles proxy routing automatically.`,
   ].filter(l => l !== "").join("\n");

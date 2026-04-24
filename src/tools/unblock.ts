@@ -8,7 +8,7 @@ import type { UnblockParams } from "./types.js";
  * when extract's auto-router hints suggest retrying with render.
  */
 export async function novadaUnblock(params: UnblockParams, apiKey?: string): Promise<string> {
-  const { url, method, country: _country, wait_for, timeout } = params;
+  const { url, method, country, wait_for, timeout } = params;
 
   const renderMode = method === "browser" ? "browser" as const : "render" as const;
 
@@ -17,6 +17,7 @@ export async function novadaUnblock(params: UnblockParams, apiKey?: string): Pro
     apiKey,
     timeout,
     waitForSelector: wait_for,
+    country,
   });
 
   const htmlLength = result.html.length;

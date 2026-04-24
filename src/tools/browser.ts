@@ -1,4 +1,5 @@
 import type { BrowserParams, BrowserAction } from "./types.js";
+import { getBrowserWs } from "../utils/credentials.js";
 
 interface ActionResult {
   action: string;
@@ -13,7 +14,7 @@ interface ActionResult {
  * Each call creates a fresh browser context — no state persists between calls.
  */
 export async function novadaBrowser(params: BrowserParams): Promise<string> {
-  const wsEndpoint = process.env.NOVADA_BROWSER_WS;
+  const wsEndpoint = getBrowserWs();
   if (!wsEndpoint) {
     return [
       `## Browser API — Not Configured`,
@@ -143,7 +144,8 @@ async function executeAction(page: any, action: BrowserAction): Promise<ActionRe
     case "screenshot": {
       const buf = await page.screenshot({ fullPage: true, type: "png" });
       const b64 = buf.toString("base64");
-      return { action: "screenshot", status: "ok", data: `data:image/png;base64,${b64.slice(0, 100)}... (${b64.length} chars)` };
+      // Return full base64 for programmatic use; agents can decode or display as an image
+      return { action: "screenshot", status: "ok", data: `data:image/png;base64,${b64}` };
     }
 
     case "snapshot": {

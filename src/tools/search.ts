@@ -5,14 +5,15 @@ import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./type
 
 const SERP_UNAVAILABLE = `## Search Unavailable
 
-The Novada SERP endpoint is not yet configured for this API key.
+The Novada SERP endpoint is not yet available for this API key.
 
-**Alternatives while SERP is unavailable:**
-- \`novada_extract\` with a direct URL — e.g. \`https://www.google.com/search?q=your+query\`
-- \`novada_research\` — multi-source research without a dedicated search API
-- \`novada_map\` + \`novada_extract\` — discover and read pages from a known site
+**Why:** \`novada_search\` requires a dedicated SERP quota that is separate from
+the Scraper API and Web Unblocker plans. Contact support@novada.com to enable it.
 
-Contact support@novada.com to enable SERP access for your account.`;
+**Alternatives right now:**
+- \`novada_extract\` — fetch and read any specific URL directly
+- \`novada_research\` — multi-source research using extract-based discovery
+- \`novada_map\` + \`novada_extract\` — discover and read pages from a known site`;
 
 export async function novadaSearch(params: SearchParams, apiKey: string): Promise<string> {
   const engine = params.engine || "google";
@@ -62,8 +63,12 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
       }
     );
   } catch (error) {
-    if (error instanceof AxiosError && error.response?.status === 404) {
-      return SERP_UNAVAILABLE;
+    if (error instanceof AxiosError) {
+      const status = error.response?.status;
+      // 404 = endpoint not deployed yet; 402 = key lacks SERP quota (separate from Scraper/Unblocker plans)
+      if (status === 404 || status === 402) {
+        return SERP_UNAVAILABLE;
+      }
     }
     throw error;
   }
@@ -104,8 +109,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
 
   for (let i = 0; i < reranked.length; i++) {
     const r = reranked[i];
-    let url = r.url || r.link || "N/A";
-    url = unwrapBingUrl(url);
+    const rawUrl = r.url || r.link;
+    if (!rawUrl) continue; // Skip results with no URL — would render as "N/A" and break agents
+    let url = unwrapBingUrl(rawUrl);
 
     // Strip pagination UI text from snippets
     const rawSnippet = r.description || r.snippet || "";

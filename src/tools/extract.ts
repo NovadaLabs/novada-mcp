@@ -60,6 +60,7 @@ async function extractSingle(
 
   let html: string;
   let usedMode: "static" | "render" | "browser" | "render-failed" = "static";
+  let renderError: string | null = null;
 
   // Force modes (or registry-resolved modes) skip escalation logic
   if (effectiveMode === "browser") {
@@ -80,8 +81,8 @@ async function extractSingle(
     }
     html = response.data;
 
-    if (renderMode === "auto" && detectJsHeavyContent(html)) {
-      // Escalate to render mode
+    if (renderMode === "auto" && (detectJsHeavyContent(html) || detectBotChallenge(html))) {
+      // Escalate to render mode (JS-heavy OR bot challenge on static fetch)
       try {
         const renderResponse = await fetchWithRender(params.url, apiKey);
         const renderHtml = String(renderResponse.data);
@@ -93,6 +94,7 @@ async function extractSingle(
           } else {
             // No browser available — keep static html, mark as failed
             usedMode = "render-failed";
+            renderError = "Render returned a bot challenge page";
           }
         } else if (!detectJsHeavyContent(renderHtml)) {
           html = renderHtml;
@@ -106,8 +108,9 @@ async function extractSingle(
           html = renderHtml;
           usedMode = "render";
         }
-      } catch {
-        // render failed — try Browser API if available
+      } catch (err) {
+        // render threw — try Browser API if available
+        renderError = err instanceof Error ? err.message : String(err);
         if (isBrowserConfigured()) {
           html = await fetchViaBrowser(params.url);
           usedMode = "browser";
@@ -159,7 +162,7 @@ async function extractSingle(
   }
 
   const contentLen = mainContent.length;
-  const isTruncated = contentLen >= 25000;
+  const isTruncated = contentLen > 25000;
 
   // Quality scoring
   const structuredData = extractStructuredData(html);
@@ -215,11 +218,28 @@ async function extractSingle(
   }
 
   lines.push(``, `---`, `## Agent Hints`);
+  if (usedMode === "browser") {
+    lines.push(`- Content fetched via Browser API (CDP). Cost: ~$3/GB — use only when static/render modes fail.`);
+  }
   if (stillJsHeavy) {
-    lines.push(`- ⚠ Page appears JavaScript-rendered. Content above may be incomplete.`);
-    lines.push(`- Retry with render="render" to use Novada Web Unblocker (JS rendering).`);
-    if (!isBrowserConfigured()) {
-      lines.push(`- For full browser rendering, set NOVADA_BROWSER_WS env var.`);
+    if (usedMode === "render-failed") {
+      // Render was already attempted and failed — do NOT suggest retrying with render='render'
+      lines.push(`- [WARNING] Page is JavaScript-rendered. Web Unblocker was attempted but failed.`);
+      if (renderError) lines.push(`- Render error: ${renderError}`);
+      lines.push(`- Do NOT retry with render="render" — it was already tried and failed.`);
+      if (isBrowserConfigured()) {
+        lines.push(`- Try render="browser" to use the Browser API instead. Note: Browser API costs ~$3/GB.`);
+      } else {
+        lines.push(`- To enable browser-level rendering: set NOVADA_BROWSER_WS env var (get credentials at https://dashboard.novada.com/overview/browser/), then retry with render="browser".`);
+        lines.push(`- Also verify NOVADA_WEB_UNBLOCKER_KEY is set correctly.`);
+        lines.push(`- Note: Browser API costs ~$3/GB — use sparingly.`);
+      }
+    } else {
+      lines.push(`- [WARNING] Page appears JavaScript-rendered. Content above may be incomplete.`);
+      lines.push(`- Retry with render="render" to use Novada Web Unblocker (JS rendering).`);
+      if (!isBrowserConfigured()) {
+        lines.push(`- For full browser rendering (costs ~$3/GB), set NOVADA_BROWSER_WS env var.`);
+      }
     }
   }
   if (isTruncated) {

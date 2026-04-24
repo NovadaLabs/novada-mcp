@@ -69,6 +69,64 @@ describe("NovadaClient", () => {
     });
   });
 
+  describe("crawl()", () => {
+    it("returns typed CrawlPage array", async () => {
+      mockedAxios.get.mockResolvedValue({
+        data: `<html><body>
+          <h1>Crawl Title</h1>
+          <p>${"word ".repeat(30)}</p>
+          <a href="https://example.com/sub">Sub</a>
+        </body></html>`,
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      });
+
+      const pages = await client.crawl("https://example.com", { maxPages: 1, render: "static" });
+      expect(Array.isArray(pages)).toBe(true);
+      expect(pages.length).toBeGreaterThan(0);
+      expect(pages[0]).toMatchObject({ url: expect.any(String), title: expect.any(String), content: expect.any(String) });
+    });
+  });
+
+  describe("map()", () => {
+    it("returns typed MapResult", async () => {
+      const sitemap = `<?xml version="1.0"?><urlset>
+        <url><loc>https://example.com/</loc></url>
+        <url><loc>https://example.com/about</loc></url>
+      </urlset>`;
+      mockedAxios.get
+        .mockRejectedValueOnce(new Error("404")) // robots.txt
+        .mockResolvedValueOnce({ data: sitemap, status: 200, headers: {}, config: {} as never, statusText: "OK" });
+
+      const result = await client.map("https://example.com");
+      expect(result.root).toBe("https://example.com");
+      expect(Array.isArray(result.urls)).toBe(true);
+      expect(result.urls.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("research()", () => {
+    it("returns ResearchResult with sources and queries", async () => {
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          code: 200,
+          data: {
+            organic_results: [
+              { title: "Research Source", url: "https://source.example.com", description: "Key info about topic" },
+            ],
+          },
+        },
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      });
+
+      const result = await client.research("What is AI?", { depth: "quick" });
+      expect(result.question).toBe("What is AI?");
+      expect(typeof result.depth).toBe("string");
+      expect(Array.isArray(result.sources)).toBe(true);
+      expect(Array.isArray(result.extracted)).toBe(true);
+      expect(Array.isArray(result.queriesUsed)).toBe(true);
+    });
+  });
+
   describe("proxy()", () => {
     it("throws when proxy not configured", () => {
       const c = new NovadaClient({ scraperApiKey: "key" });

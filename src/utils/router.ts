@@ -1,5 +1,24 @@
-import { fetchViaProxy, fetchWithRender, detectJsHeavyContent } from "./http.js";
+import { fetchViaProxy, fetchWithRender, detectJsHeavyContent, detectBotChallenge } from "./http.js";
 import { fetchViaBrowser, isBrowserConfigured } from "./browser.js";
+
+/**
+ * Normalize axios response data to a string.
+ * Axios auto-parses JSON responses to objects — this converts them back to text
+ * so callers that expect HTML/text still receive a string.
+ * Binary/Buffer responses are rejected (not useful for content extraction).
+ */
+function normalizeToString(data: unknown): string {
+  if (typeof data === "string") return data;
+  if (data === null || data === undefined) return "";
+  if (Buffer.isBuffer(data)) {
+    throw new Error("Response is binary data (Buffer). The URL may return an image, PDF, or other binary file — not supported for content extraction.");
+  }
+  if (typeof data === "object") {
+    // JSON response — stringify so agents can read and parse it
+    return JSON.stringify(data, null, 2);
+  }
+  return String(data);
+}
 
 export type RenderMode = "auto" | "static" | "render" | "browser";
 export type UsedMode = "static" | "render" | "browser" | "render-failed";
@@ -36,10 +55,12 @@ export async function routeFetch(
     apiKey?: string;
     timeout?: number;
     waitForSelector?: string;
+    country?: string;
   } = {}
 ): Promise<RouteResult> {
   const renderMode = options.render ?? "auto";
   const timeout = options.timeout ?? 30000;
+  const country = options.country;
 
   // Force browser mode
   if (renderMode === "browser") {
@@ -49,37 +70,36 @@ export async function routeFetch(
 
   // Force render mode (Web Unblocker)
   if (renderMode === "render") {
-    const response = await fetchWithRender(url, options.apiKey);
-    if (typeof response.data !== "string") {
-      throw new Error("Response is not HTML. The URL may return JSON or binary data.");
-    }
-    return { html: response.data, mode: "render", cost: "medium" };
+    const response = await fetchWithRender(url, options.apiKey, { country });
+    return { html: normalizeToString(response.data), mode: "render", cost: "medium" };
   }
 
   // Static mode — no escalation
   if (renderMode === "static") {
     const response = await fetchViaProxy(url, options.apiKey);
-    if (typeof response.data !== "string") {
-      throw new Error("Response is not HTML. The URL may return JSON or binary data.");
-    }
-    return { html: response.data, mode: "static", cost: "low" };
+    return { html: normalizeToString(response.data), mode: "static", cost: "low" };
   }
 
   // Auto mode: static -> render -> browser
   const response = await fetchViaProxy(url, options.apiKey);
-  if (typeof response.data !== "string") {
-    throw new Error("Response is not HTML. The URL may return JSON or binary data.");
-  }
-  let html = response.data;
+  let html = normalizeToString(response.data);
 
-  if (!detectJsHeavyContent(html)) {
+  if (!detectJsHeavyContent(html) && !detectBotChallenge(html)) {
     return { html, mode: "static", cost: "low" };
   }
 
-  // Static returned JS-heavy content — escalate to render
+  // Static returned JS-heavy or bot-challenge content — escalate to render
   try {
-    const renderResponse = await fetchWithRender(url, options.apiKey);
+    const renderResponse = await fetchWithRender(url, options.apiKey, { country });
     const renderHtml = String(renderResponse.data);
+    // If render returned a bot challenge page, escalate to browser or fail
+    if (detectBotChallenge(renderHtml)) {
+      if (isBrowserConfigured()) {
+        const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector });
+        return { html: browserHtml, mode: "browser", cost: "high" };
+      }
+      return { html, mode: "render-failed", cost: "low" };
+    }
     if (!detectJsHeavyContent(renderHtml)) {
       return { html: renderHtml, mode: "render", cost: "medium" };
     }

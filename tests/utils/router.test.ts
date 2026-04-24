@@ -97,24 +97,26 @@ describe("routeFetch", () => {
     expect(result.cost).toBe("medium");
   });
 
-  it("auto mode returns render when unblocker fails but fallback succeeds (still JS-heavy)", async () => {
-    // Static returns JS-heavy, render POST fails but fetchWithRender falls back to direct fetch
-    // which also returns JS-heavy — router returns "render" mode with fallback content
+  it("auto mode returns render-failed when unblocker fails with non-auth error", async () => {
+    // Static returns JS-heavy, render POST fails with a non-auth error.
+    // fetchWithRender now re-throws all errors — the router's catch block fires
+    // and returns render-failed (correct behavior, not a silent fallback).
     vi.mocked(axios).get.mockResolvedValue({ data: JS_HEAVY_HTML, status: 200, statusText: "OK", headers: {}, config: {} as never });
     vi.mocked(axios).post.mockRejectedValue(new Error("Unblocker down"));
     process.env.NOVADA_WEB_UNBLOCKER_KEY = "test-key";
 
     const result = await routeFetch("https://spa-app.com", { render: "auto", apiKey: "key" });
-    // fetchWithRender catches non-auth errors and falls back to fetchViaProxy
-    // Router gets a response (even if JS-heavy) so it's "render" not "render-failed"
-    expect(result.mode).toBe("render");
-    expect(result.cost).toBe("medium");
+    // fetchWithRender propagates the error — router catches it and returns render-failed
+    // This is the correct behavior: mode metadata accurately reflects what happened.
+    expect(result.mode).toBe("render-failed");
+    expect(result.cost).toBe("low");
   });
 
-  it("throws on non-HTML response in static mode", async () => {
+  it("returns JSON-stringified content when API returns object in static mode", async () => {
     vi.mocked(axios).get.mockResolvedValue({ data: { json: true }, status: 200, statusText: "OK", headers: {}, config: {} as never });
-    await expect(routeFetch("https://api.com/data", { render: "static", apiKey: "key" }))
-      .rejects.toThrow("not HTML");
+    const result = await routeFetch("https://api.com/data", { render: "static", apiKey: "key" });
+    expect(result.mode).toBe("static");
+    expect(result.html).toContain('"json": true');
   });
 });
 
