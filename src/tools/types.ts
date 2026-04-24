@@ -258,7 +258,8 @@ const BrowserActionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("navigate"),
     url: safeUrl,
-    wait_until: z.enum(["load", "domcontentloaded", "networkidle"]).default("domcontentloaded"),
+    wait_until: z.enum(["load", "domcontentloaded", "networkidle"]).default("domcontentloaded")
+      .describe("Page load event to wait for. Default 'domcontentloaded' works for most sites including SPAs (X, TikTok). Avoid 'networkidle' for SPAs — they continuously poll and never reach networkidle, causing a 30s timeout."),
   }),
   z.object({ action: z.literal("click"), selector: z.string().min(1) }),
   z.object({ action: z.literal("type"), selector: z.string().min(1), text: z.string() }),
@@ -284,7 +285,7 @@ export const BrowserParamsSchema = z.object({
   actions: z.array(BrowserActionSchema).min(1).max(20)
     .describe("Array of browser actions to execute sequentially. Max 20 per call."),
   country: z.string().length(2).optional()
-    .describe("ISO 2-letter country code for geo-targeted browsing."),
+    .describe("ISO 2-letter country code for browser exit node (e.g. 'us', 'gb'). Required for platforms with geo-restrictions (TikTok is banned in India — use country='us'). Omit for no targeting."),
   timeout: z.number().int().min(5000).max(120000).default(60000)
     .describe("Total timeout for all actions in ms. Default 60000."),
   session_id: z.string().optional()

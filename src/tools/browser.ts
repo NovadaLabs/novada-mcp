@@ -189,6 +189,8 @@ export async function novadaBrowser(params: BrowserParams): Promise<string> {
   }
   lines.push(`- Chain actions to complete multi-step flows in one call.`);
   lines.push(`- list_sessions shows all currently active session IDs.`);
+  lines.push(`- Geo-restrictions: TikTok is banned in India — always pass country="us" for TikTok and other geo-restricted platforms.`);
+  lines.push(`- SPA navigation: use wait_until="domcontentloaded" (default) for X/Twitter, TikTok, React apps. Never use "networkidle" for SPAs — they never reach networkidle and will timeout.`);
   if (failed > 0) {
     lines.push(`- ${failed} action(s) failed. Check selectors and page state.`);
   }
