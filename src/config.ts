@@ -1,8 +1,18 @@
 export const VERSION = "0.8.3";
 
 // Scraper API — platform scraper endpoint (POST /request with Bearer token auth).
-// Only /request is live. /search (SERP) returns 404 — pending backend deployment.
+// Only /request is live. Returns code 11006 when Scraper product is not activated on account.
 export const SCRAPER_API_BASE = "https://scraper.novada.com";
+
+// Scraper task result download — uses apikey query param, not Bearer token.
+// GET /scraper_download?task_id=...&file_type=json&apikey=...
+// Returns {"code":27202} when pending, or JSON array when complete.
+export const SCRAPER_DOWNLOAD_BASE = "https://api.novada.com/g/api/proxy";
+
+// SERP / Search API — correct domain per official Novada docs.
+// Endpoint: POST /search with JSON body { serpapi_query: { engine, q, api_key, num, ... } }
+// Returns code 402 when account lacks SERP quota (separate plan from Scraper/Unblocker).
+export const SCRAPERAPI_BASE = "https://scraperapi.novada.com";
 
 // Web Unblocker — JS-rendered pages, POST /request with Bearer token auth.
 // Response: { code: 0, data: { code: 200, html: "...", use_balance: N } }

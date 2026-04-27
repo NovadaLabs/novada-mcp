@@ -1,35 +1,103 @@
 import axios, { AxiosError } from "axios";
-import { SCRAPER_API_BASE, EXCEL_MAX_SHEET_NAME } from "../config.js";
+import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE, EXCEL_MAX_SHEET_NAME } from "../config.js";
 import { formatAsMarkdown, formatAsCsv, formatAsHtml, formatAsXlsx } from "../utils/format.js";
 import type { ScrapeParams } from "./types.js";
 
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
 
-interface ScrapeApiResponse {
+// How long to wait for a task to complete before giving up
+const POLL_TIMEOUT_MS = 90_000;
+const POLL_INTERVAL_MS = 2_000;
+
+interface SubmitApiResponse {
   code: number;
   msg?: string;
   data: unknown;
+  timestamp?: number;
 }
 
-/** Call the Novada platform scraper API */
-async function callScraper(
+type DownloadResultItem =
+  | { spider_code: 200; rest: Record<string, unknown> }
+  | { error: string; error_code?: number };
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** Submit a scraper task and return the task_id */
+async function submitScrapeTask(
   apiKey: string,
   scraper_name: string,
   scraper_id: string,
   params: Record<string, unknown>
-): Promise<ScrapeApiResponse> {
-  const resp = await axios.post(
-    SCRAPE_ENDPOINT,
-    { scraper_name, scraper_id, ...params },
-    {
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      timeout: 60000,
+): Promise<string> {
+  const form = new URLSearchParams();
+  form.append("scraper_name", scraper_name);
+  form.append("scraper_id", scraper_id);
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null) form.append(k, String(v));
+  }
+
+  const resp = await axios.post(SCRAPE_ENDPOINT, form, {
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    timeout: 60000,
+  });
+
+  const body = resp.data as SubmitApiResponse;
+
+  if (body.code !== 0) {
+    const errorMessages: Record<number, string> = {
+      10001: "Missing required parameters. Check platform and operation fields.",
+      11000: "Invalid API key.",
+      11006: "Scraper API not yet activated on this account. Go to dashboard.novada.com/overview/scraper/ to activate instantly — no email needed.",
+      11008: `Unknown platform '${scraper_name}'. Use the exact domain (e.g. 'amazon.com', 'reddit.com').`,
+    };
+    const msg = errorMessages[body.code] ?? body.msg ?? "Unknown scraper error";
+    throw new Error(`Scraper error (code ${body.code}): ${msg}`);
+  }
+
+  // Response nesting: { code:0, data: { code:200, data: { task_id: "..." } } }
+  const inner = body.data as Record<string, unknown> | null;
+  const taskId = (inner?.data as Record<string, unknown> | undefined)?.task_id as string | undefined;
+  if (!taskId) {
+    throw new Error(`Scraper submit succeeded but no task_id in response: ${JSON.stringify(body)}`);
+  }
+
+  return taskId;
+}
+
+/** Poll the download endpoint until the task completes or times out */
+async function pollForResult(apiKey: string, taskId: string): Promise<DownloadResultItem[]> {
+  const url = `${SCRAPER_DOWNLOAD_BASE}/scraper_download?task_id=${encodeURIComponent(taskId)}&file_type=json&apikey=${encodeURIComponent(apiKey)}`;
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    const resp = await axios.get(url, { timeout: 30000 });
+    const body = resp.data;
+
+    // Pending: { code: 27202, data: null, msg: "" }
+    if (
+      body !== null &&
+      typeof body === "object" &&
+      !Array.isArray(body) &&
+      (body as Record<string, unknown>).code === 27202
+    ) {
+      await sleep(POLL_INTERVAL_MS);
+      continue;
     }
-  );
-  return resp.data as ScrapeApiResponse;
+
+    // Complete: array of result items
+    if (Array.isArray(body)) {
+      return body as DownloadResultItem[];
+    }
+
+    throw new Error(`Unexpected download response: ${JSON.stringify(body).slice(0, 200)}`);
+  }
+
+  throw new Error(`Scraper task ${taskId} did not complete within ${POLL_TIMEOUT_MS / 1000}s. Check dashboard for status.`);
 }
 
 /** Flatten a potentially nested object for tabular display */
@@ -69,9 +137,8 @@ function extractRecords(data: unknown): Record<string, unknown>[] {
     );
   }
   if (data !== null && typeof data === "object") {
-    // Check common wrapper patterns
     const d = data as Record<string, unknown>;
-    for (const key of ["results", "items", "records", "data", "products", "posts"]) {
+    for (const key of ["organic_results", "organic", "results", "items", "records", "data", "products", "posts"]) {
       if (Array.isArray(d[key])) return extractRecords(d[key]);
     }
     return [d];
@@ -82,9 +149,10 @@ function extractRecords(data: unknown): Record<string, unknown>[] {
 export async function novadaScrape(params: ScrapeParams, apiKey: string): Promise<string> {
   const { platform, operation, params: opParams, format, limit } = params;
 
-  let apiResponse: ScrapeApiResponse;
+  // Step 1: Submit task
+  let taskId: string;
   try {
-    apiResponse = await callScraper(apiKey, platform, operation, opParams as Record<string, unknown>);
+    taskId = await submitScrapeTask(apiKey, platform, operation, opParams as Record<string, unknown>);
   } catch (error) {
     if (error instanceof AxiosError) {
       const status = error.response?.status;
@@ -97,19 +165,30 @@ export async function novadaScrape(params: ScrapeParams, apiKey: string): Promis
     throw error;
   }
 
-  // Handle API-level errors
-  if (apiResponse.code !== 0) {
-    const errorMessages: Record<number, string> = {
-      10001: "Missing required parameters. Check platform and operation fields.",
-      11000: "Invalid API key.",
-      11006: "Scraper API not yet activated on this account. Go to dashboard.novada.com/overview/scraper/ to activate instantly — no email needed.",
-      11008: `Unknown platform '${platform}'. Use the exact domain (e.g. 'amazon.com', 'reddit.com').`,
-    };
-    const msg = errorMessages[apiResponse.code] ?? apiResponse.msg ?? "Unknown scraper error";
-    throw new Error(`Scraper error (code ${apiResponse.code}): ${msg}`);
+  // Step 2: Poll for result
+  let resultItems: DownloadResultItem[];
+  try {
+    resultItems = await pollForResult(apiKey, taskId);
+  } catch (error) {
+    if (error instanceof AxiosError) {
+      throw new Error(`Failed to retrieve scraper results: ${error.message}`);
+    }
+    throw error;
   }
 
-  const rawRecords = extractRecords(apiResponse.data);
+  // Step 3: Check for task-level errors
+  const firstItem = resultItems[0];
+  if (!firstItem) {
+    return `## Scrape Results\nplatform: ${platform} | operation: ${operation}\n\n_No records returned._`;
+  }
+
+  if ("error" in firstItem) {
+    const { error: errMsg, error_code: errCode } = firstItem as { error: string; error_code?: number };
+    throw new Error(`Scraper task failed (${errCode ?? "unknown"}): ${errMsg}`);
+  }
+
+  const successItem = firstItem as { spider_code: 200; rest: Record<string, unknown> };
+  const rawRecords = extractRecords(successItem.rest);
   const records = rawRecords.slice(0, limit).map(r => flattenRecord(r)) as Record<string, unknown>[];
 
   if (records.length === 0) {
@@ -127,6 +206,12 @@ export async function novadaScrape(params: ScrapeParams, apiKey: string): Promis
         "```json",
         JSON.stringify(rawRecords.slice(0, limit), null, 2),
         "```",
+        ``,
+        `---`,
+        `## Agent Hints`,
+        `- Increase limit (max 100) to retrieve more records.`,
+        `- For human-readable output: use format='markdown' instead.`,
+        `- Read novada://scraper-platforms resource to discover other operations on this platform.`,
       ].join("\n");
 
     case "csv":
@@ -137,6 +222,12 @@ export async function novadaScrape(params: ScrapeParams, apiKey: string): Promis
         "```csv",
         formatAsCsv(records),
         "```",
+        ``,
+        `---`,
+        `## Agent Hints`,
+        `- First row is headers. Parse as CSV for downstream processing.`,
+        `- Increase limit (max 100) to retrieve more records.`,
+        `- For structured JSON output: use format='json' instead.`,
       ].join("\n");
 
     case "html":
@@ -173,7 +264,7 @@ export async function novadaScrape(params: ScrapeParams, apiKey: string): Promis
         `- Use format='json' or format='csv' for downstream processing.`,
         `- Increase limit (max 100) to retrieve more records.`,
         `- For structured scraping of other platforms, change platform and operation.`,
-        `- View supported scrapers at: https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api`,
+        `- Discover all 129 supported platforms and their operations: read novada://scraper-platforms resource.`,
       ].join("\n");
   }
 }

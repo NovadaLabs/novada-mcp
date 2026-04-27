@@ -12,9 +12,33 @@ const MOCK_RECORDS = [
   { title: "iPhone 16", price: "$799", rating: "4.6", asin: "B09G9FPHY7" },
 ];
 
+// Submit response: { code:0, data: { code:200, data: { task_id:"..." } } }
+const SUBMIT_OK = {
+  data: { code: 0, data: { code: 200, data: { task_id: "test-task-123" }, msg: "success" }, msg: "success" },
+  status: 200,
+  headers: {},
+  config: {} as never,
+  statusText: "OK",
+};
+
+function makeDownloadOk(records: unknown[]) {
+  return {
+    data: [{ spider_code: 200, rest: { results: records } }],
+    status: 200,
+    headers: {},
+    config: {} as never,
+    statusText: "OK",
+  };
+}
+
 function mockSuccess(records: unknown[]) {
+  mockedAxios.post.mockResolvedValue(SUBMIT_OK);
+  mockedAxios.get.mockResolvedValue(makeDownloadOk(records));
+}
+
+function mockApiError(code: number, msg: string) {
   mockedAxios.post.mockResolvedValue({
-    data: { code: 0, data: records, msg: "" },
+    data: { code, data: null, msg },
     status: 200,
     headers: {},
     config: {} as never,
@@ -22,9 +46,10 @@ function mockSuccess(records: unknown[]) {
   });
 }
 
-function mockApiError(code: number, msg: string) {
-  mockedAxios.post.mockResolvedValue({
-    data: { code, data: null, msg },
+function mockTaskError(errMsg: string, errCode?: number) {
+  mockedAxios.post.mockResolvedValue(SUBMIT_OK);
+  mockedAxios.get.mockResolvedValue({
+    data: [{ error: errMsg, ...(errCode !== undefined ? { error_code: errCode } : {}) }],
     status: 200,
     headers: {},
     config: {} as never,
@@ -113,10 +138,28 @@ describe("novadaScrape — request format", () => {
     expect(mockedAxios.post).toHaveBeenCalled();
     const [url, body, config] = mockedAxios.post.mock.calls[0];
     expect(url).toContain("scraper.novada.com");
-    expect((body as Record<string, unknown>).scraper_name).toBe("amazon.com");
-    expect((body as Record<string, unknown>).scraper_id).toBe("amazon_product_by-keywords");
-    expect((body as Record<string, unknown>).keyword).toBe("iphone");
-    expect((config as Record<string, unknown>).headers).toMatchObject({ "Authorization": "Bearer test-key" });
+    const form = body as URLSearchParams;
+    expect(form.get("scraper_name")).toBe("amazon.com");
+    expect(form.get("scraper_id")).toBe("amazon_product_by-keywords");
+    expect(form.get("keyword")).toBe("iphone");
+    expect((config as Record<string, unknown>).headers).toMatchObject({
+      "Authorization": "Bearer test-key",
+      "Content-Type": "application/x-www-form-urlencoded",
+    });
+  });
+
+  it("polls the download endpoint with task_id and apikey", async () => {
+    mockSuccess(MOCK_RECORDS);
+    await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      "test-key"
+    );
+    expect(mockedAxios.get).toHaveBeenCalled();
+    const [url] = mockedAxios.get.mock.calls[0];
+    expect(url).toContain("api.novada.com");
+    expect(url).toContain("scraper_download");
+    expect(url).toContain("task_id=test-task-123");
+    expect(url).toContain("apikey=test-key");
   });
 
   it("respects limit — truncates records to limit", async () => {
@@ -129,6 +172,23 @@ describe("novadaScrape — request format", () => {
     const jsonMatch = result.match(/```json\n([\s\S]+?)\n```/);
     const parsed = JSON.parse(jsonMatch![1]);
     expect(parsed).toHaveLength(10);
+  });
+
+  it("retries polling when task is pending (code 27202)", async () => {
+    mockedAxios.post.mockResolvedValue(SUBMIT_OK);
+    mockedAxios.get
+      .mockResolvedValueOnce({
+        data: { code: 27202, data: null, msg: "" },
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      })
+      .mockResolvedValueOnce(makeDownloadOk(MOCK_RECORDS));
+
+    const result = await novadaScrape(
+      { platform: "amazon.com", operation: "amazon_product_by-keywords", params: {}, format: "markdown", limit: 20 },
+      "test-key"
+    );
+    expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+    expect(result).toContain("iPhone 16 Pro");
   });
 });
 
@@ -185,5 +245,12 @@ describe("novadaScrape — error handling", () => {
       "test-key"
     );
     expect(result).toContain("No records returned");
+  });
+
+  it("throws when task fails with error in download result", async () => {
+    mockTaskError("500 Internal Server Error", 500);
+    await expect(
+      novadaScrape({ platform: "google.com", operation: "google_search", params: {}, format: "markdown", limit: 20 }, "test-key")
+    ).rejects.toThrow("Scraper task failed");
   });
 });

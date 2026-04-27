@@ -12,7 +12,7 @@ const client = new NovadaClient({ scraperApiKey: "test-key" });
 describe("NovadaClient", () => {
   describe("search()", () => {
     it("returns typed SearchResult array", async () => {
-      mockedAxios.get.mockResolvedValue({
+      mockedAxios.post.mockResolvedValueOnce({
         data: {
           code: 200,
           data: {
@@ -48,14 +48,17 @@ describe("NovadaClient", () => {
 
   describe("scrape()", () => {
     it("returns ScrapeResult with records and formatted string", async () => {
+      // Step 1: submit → task_id
       mockedAxios.post.mockResolvedValue({
-        data: {
-          code: 0,
-          data: [
-            { title: "iPhone 16 Pro", price: "$999", asin: "B09X" },
-            { title: "iPhone 16", price: "$799", asin: "B09Y" },
-          ],
-        },
+        data: { code: 0, data: { code: 200, data: { task_id: "sdk-task-123" }, msg: "success" }, msg: "success" },
+        status: 200, headers: {}, config: {} as never, statusText: "OK",
+      });
+      // Step 2: poll → result array
+      mockedAxios.get.mockResolvedValue({
+        data: [{ spider_code: 200, rest: { results: [
+          { title: "iPhone 16 Pro", price: "$999", asin: "B09X" },
+          { title: "iPhone 16", price: "$799", asin: "B09Y" },
+        ] } }],
         status: 200, headers: {}, config: {} as never, statusText: "OK",
       });
 
@@ -106,7 +109,7 @@ describe("NovadaClient", () => {
 
   describe("research()", () => {
     it("returns ResearchResult with sources and queries", async () => {
-      mockedAxios.get.mockResolvedValue({
+      mockedAxios.post.mockResolvedValue({
         data: {
           code: 200,
           data: {
@@ -148,7 +151,7 @@ describe("NovadaClient", () => {
   describe("verify()", () => {
     it("returns VerifyResult with parsed verdict and confidence", async () => {
       // Mock 3 search calls: query 1 has 4 results (supporting), query 2 has 1 result (contra)
-      mockedAxios.get
+      mockedAxios.post
         .mockResolvedValueOnce({
           data: {
             code: 200,
