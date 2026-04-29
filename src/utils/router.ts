@@ -1,6 +1,7 @@
 import { fetchViaProxy, fetchWithRender, detectJsHeavyContent, detectBotChallenge } from "./http.js";
 import { fetchViaBrowser, isBrowserConfigured } from "./browser.js";
 import { isPdfResponse, extractPdf } from "./pdf.js";
+import { getWebUnblockerKey } from "./credentials.js";
 
 /**
  * Normalize axios response data to a string.
@@ -71,6 +72,25 @@ export async function routeFetch(
 
   // Force render mode (Web Unblocker)
   if (renderMode === "render") {
+    const unblockerKey = getWebUnblockerKey();
+    if (!unblockerKey) {
+      // Web Unblocker not configured — perform static fetch, return render-failed so
+      // callers know JS rendering did NOT occur and can escalate further if needed
+      const response = await fetchViaProxy(url, options.apiKey);
+      const contentType = String((response.headers as Record<string, string>)?.["content-type"] ?? "");
+      if (isPdfResponse(url, contentType)) {
+        const pdfBuffer = Buffer.isBuffer(response.data)
+          ? response.data
+          : Buffer.from(response.data as string, "binary");
+        const pdf = await extractPdf(pdfBuffer);
+        return {
+          html: `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`,
+          mode: "render-failed" as UsedMode,
+          cost: "low" as CostTier,
+        };
+      }
+      return { html: normalizeToString(response.data), mode: "render-failed", cost: "low" };
+    }
     const response = await fetchWithRender(url, options.apiKey, { country });
     const contentType = String((response.headers as Record<string, string>)?.["content-type"] ?? "");
     if (isPdfResponse(url, contentType)) {

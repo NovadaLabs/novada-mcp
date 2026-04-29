@@ -45,7 +45,22 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
   }
 
   // Single URL mode
-  return extractSingle(params as ExtractParams & { url: string }, apiKey);
+  try {
+    return await extractSingle(params as ExtractParams & { url: string }, apiKey);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return [
+      `## Extract Failed`,
+      `url: ${String(params.url)}`,
+      ``,
+      `Error: ${message}`,
+      ``,
+      `## Agent Hints`,
+      `- If the URL returns JSON or binary data, it cannot be extracted as HTML.`,
+      `- If the URL is unreachable, check the domain and try novada_map first.`,
+      `- For JS-heavy pages returning empty content, try with render="render".`,
+    ].join("\n");
+  }
 }
 
 async function extractSingle(

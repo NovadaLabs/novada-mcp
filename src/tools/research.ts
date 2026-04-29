@@ -5,12 +5,16 @@ import type { ResearchParams, NovadaApiResponse, NovadaSearchResult } from "./ty
 import { novadaExtract } from "./extract.js";
 
 export async function novadaResearch(params: ResearchParams, apiKey: string): Promise<string> {
+  // Support 'query' as alias for 'question' (matches other tools' param naming)
+  if (!params.question && params.query) {
+    params = { ...params, question: params.query };
+  }
   // Resolve depth — 'auto' picks based on question complexity heuristic
-  const resolvedDepth = resolveDepth(params.depth || "auto", params.question);
+  const resolvedDepth = resolveDepth(params.depth || "auto", params.question ?? "");
   const isDeep = resolvedDepth === "deep" || resolvedDepth === "comprehensive";
   const isComprehensive = resolvedDepth === "comprehensive";
 
-  const queries = generateSearchQueries(params.question, isDeep, isComprehensive, params.focus);
+  const queries = generateSearchQueries(params.question ?? "", isDeep, isComprehensive, params.focus);
 
   // Execute all searches in parallel
   const allResults = await Promise.all(
@@ -70,6 +74,8 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
             { url: source.url, format: "markdown", query: params.question, render: "auto" },
             apiKey
           );
+          // Skip failed extractions (extract.ts returns "## Extract Failed" on error)
+          if (content.startsWith("## Extract Failed")) return null;
           // Strip Agent Hints section from extracted content — too noisy in research output
           const cleanContent = content.split("## Agent Hints")[0].trim();
           return { title: source.title, url: source.url, content: cleanContent };
@@ -99,7 +105,7 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
       `2. Use \`novada_map\` on a relevant site, then \`novada_extract\` on discovered pages`,
       `3. Contact support@novada.com to enable SERP access for your account`,
       ``,
-      `**Suggested starting URLs for "${params.question.slice(0, 60)}":**`,
+      `**Suggested starting URLs for "${(params.question ?? "").slice(0, 60)}":**`,
       `- \`novada_extract\` with a Wikipedia, official docs, or news URL on this topic`,
       `- \`novada_map\` on a domain you know covers this topic`,
     ].join("\n");

@@ -37,7 +37,23 @@ const AVAILABILITY_PATTERNS = [
   /(in stock|out of stock|available|unavailable|ships? in \d+|pre-?order|sold out|backorder)/i,
 ];
 
+/** Title patterns: first H1, or "title: X" */
+const TITLE_PATTERNS = [
+  /^#\s+(.{2,200}?)(?:\s*\n|$)/m,
+  /^##\s+(.{2,200}?)(?:\s*\n|$)/m,
+  /^title[:\s]+(.{2,200}?)(?:\s*\n|$)/im,
+];
+
+/** Description patterns: "description: X" or first substantial sentence */
+const DESCRIPTION_PATTERNS = [
+  /(?:description|summary)[:\s]+(.{10,300}?)(?:\n|$)/i,
+  /^(?!#)([A-Z][^.!?\n]{30,250}[.!?])\s*$/m,
+];
+
 const PATTERN_MAP: Record<string, RegExp[]> = {
+  title: TITLE_PATTERNS,
+  description: DESCRIPTION_PATTERNS,
+  "meta description": DESCRIPTION_PATTERNS,
   price: PRICE_PATTERNS,
   cost: PRICE_PATTERNS,
   date: DATE_PATTERNS,

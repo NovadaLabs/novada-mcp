@@ -9,11 +9,11 @@
   <a href="https://www.npmjs.com/package/novada-search"><img src="https://img.shields.io/npm/v/novada-search?style=for-the-badge&label=MCP&color=blue" alt="npm 版本"></a>
   <a href="https://lobehub.com/mcp/goldentrii-novada-search"><img src="https://lobehub.com/badge/mcp/goldentrii-novada-search" alt="MCP 徽章"></a>
   <a href="https://smithery.ai/server/novada-search"><img src="https://img.shields.io/badge/Smithery-一键安装-8B5CF6?style=for-the-badge" alt="Smithery"></a>
-  <a href="#工具"><img src="https://img.shields.io/badge/工具数-5-brightgreen?style=for-the-badge" alt="5 个工具"></a>
+  <a href="#工具"><img src="https://img.shields.io/badge/工具数-11-brightgreen?style=for-the-badge" alt="11 个工具"></a>
   <a href="#nova--命令行工具"><img src="https://img.shields.io/badge/CLI-nova-blueviolet?style=for-the-badge" alt="CLI nova"></a>
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/代理IP-1亿+-red?style=for-the-badge" alt="1亿+ 代理 IP"></a>
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/国家覆盖-195-cyan?style=for-the-badge" alt="195 个国家"></a>
-  <img src="https://img.shields.io/badge/测试用例-124-green?style=for-the-badge" alt="124 个测试">
+  <img src="https://img.shields.io/badge/测试用例-444-green?style=for-the-badge" alt="443 个测试">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/许可证-MIT-yellow?style=for-the-badge" alt="MIT 许可证"></a>
 </p>
 
@@ -316,6 +316,7 @@ Agent 可以在选择工具之前通过 `novada://` URI 访问的参考数据。
 | `novada://engines` | 5 个搜索引擎的特性说明和推荐使用场景 |
 | `novada://countries` | 195 个国家代码（地理定向搜索参考） |
 | `novada://guide` | 工具选择决策树和常用工作流模式 |
+| `novada://scraper-platforms` | 129 个平台数据的有效 operation ID 列表 |
 
 ---
 
@@ -347,8 +348,8 @@ Agent 可以在选择工具之前通过 `novada://` URI 访问的参考数据。
 | 网站爬取 | BFS/DFS | 支持 | 支持（异步） | 不支持 |
 | URL 发现映射 | 支持 | 支持 | 支持 | 不支持 |
 | 多源深度研究 | **相关性过滤** | 支持 | 不支持 | 不支持 |
-| MCP Prompts | **3 个** | 无 | 无 | 无 |
-| MCP Resources | **3 个** | 无 | 无 | 无 |
+| MCP Prompts | **5 个** | 无 | 无 | 无 |
+| MCP Resources | **4 个** | 无 | 无 | 无 |
 | 地理定向 | **195 个国家** | 国家参数 | 无 | 国家参数 |
 | 域名过滤 | **include/exclude 双向** | 无 | 无 | 无 |
 | 反机器人绕过 | **代理 + Web Unblocker** | 无 | 无头浏览器 | 无 |

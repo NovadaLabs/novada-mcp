@@ -9,7 +9,7 @@ description: >-
 
 # Novada Agent Skill
 
-You have access to 5 Novada MCP tools. This skill tells you exactly which tool to use when and how to use it effectively.
+You have access to 11 Novada MCP tools. This skill tells you exactly which tool to use when and how to use it effectively.
 
 ## Tool Selection — Decision Tree
 
@@ -21,11 +21,18 @@ Need web data?
 │   ├── Explore an entire site → novada_map or novada_crawl
 │   └── Multi-faceted question → novada_research
 └── Want a ready-made answer with sources? → novada_research
+
+Need structured platform data (Amazon, Reddit, TikTok…)? → novada_scrape
+Need proxy credentials for your own HTTP requests? → novada_proxy
+Need to verify a factual claim? → novada_verify
+Page blocked or JS-heavy, need raw HTML? → novada_unblock
+Need to click/fill/screenshot a page? → novada_browser
+Check API key product access? → novada_health
 ```
 
 Also read `novada://guide` — it contains the full decision tree and workflow patterns.
 
-## The 5 Tools
+## The 11 Tools
 
 ### `novada_search`
 
@@ -157,6 +164,137 @@ Also read `novada://guide` — it contains the full decision tree and workflow p
   "depth": "deep",
   "focus": "security and implementation"
 }
+```
+
+---
+
+### `novada_proxy`
+
+**When:** You need to route your own HTTP requests through residential, mobile, ISP, or datacenter IPs — for geo-targeting, IP rotation, or bypassing IP-based rate limits.
+
+**Key parameters:**
+- `type` — `residential` (default), `mobile`, `isp`, `datacenter`
+- `country` — ISO 2-letter code (`us`, `gb`, `de`)
+- `city` — city-level targeting (requires `country`)
+- `session_id` — sticky session — same ID returns same IP for multi-step workflows
+- `format` — `url` (default, for Node.js/Python), `env` (shell export commands), `curl` (--proxy flag)
+
+**When NOT to use:** Web page extraction (use `novada_extract` — proxy is automatic). Web search (use `novada_search`).
+
+**Example:**
+```json
+{ "type": "residential", "country": "us", "session_id": "my-session", "format": "env" }
+```
+
+---
+
+### `novada_scrape`
+
+**When:** You need clean, structured records from a known platform — not raw HTML but tabular data. Supports 129 platforms including Amazon, Reddit, TikTok, LinkedIn, Google Shopping, Glassdoor, GitHub, Zillow, Airbnb, and more.
+
+**Key parameters:**
+- `platform` — domain, e.g. `amazon.com`, `reddit.com`, `tiktok.com`
+- `operation` — operation ID, e.g. `amazon_product_by-keywords`, `reddit_posts_by-keywords`
+- `params` — operation-specific params, e.g. `{ "keyword": "iphone 16", "num": 5 }`
+- `limit` — max records (1-100, default 20)
+- `format` — `markdown` (default, agent-optimized), `json` (programmatic), `csv`, `html`, `xlsx`
+
+**Discover platforms:** Read the `novada://scraper-platforms` MCP resource for the complete list with operation IDs and required params.
+
+**When NOT to use:** General web pages not on the platform list (use `novada_extract` or `novada_crawl`). Unknown domains.
+
+**Example:**
+```json
+{
+  "platform": "amazon.com",
+  "operation": "amazon_product_by-keywords",
+  "params": { "keyword": "iphone 16", "num": 5 },
+  "format": "json"
+}
+```
+
+---
+
+### `novada_verify`
+
+**When:** You have a factual claim and need to check whether web sources support it before citing it.
+
+**What it does:** Runs 3 parallel searches (supporting, skeptical, neutral fact-check angles) and returns a structured verdict: `supported` / `unsupported` / `contested` / `insufficient_data`. Confidence score 0–100 indicates how far from a 50/50 split.
+
+**Key parameters:**
+- `claim` — the factual statement to verify (min 10 chars)
+- `context` — optional: narrows search scope, e.g. `"as of 2024"`, `"in the US"`
+
+**When NOT to use:** Open-ended questions (use `novada_research`). Reading a specific URL (use `novada_extract`). Verdict is signal-based, not a definitive ruling.
+
+**Example:**
+```json
+{ "claim": "The Eiffel Tower is 330 meters tall", "context": "as of 2024" }
+```
+
+---
+
+### `novada_unblock`
+
+**When:** You need the raw rendered HTML of a blocked or JS-heavy page, and `novada_extract` with `render="render"` still fails or returns incomplete content.
+
+**Key parameters:**
+- `url` — URL to unblock
+- `render` — `render` (Web Unblocker, faster/cheaper) or `browser` (full Chromium CDP, handles complex SPAs)
+
+**Requires:** `NOVADA_WEB_UNBLOCKER_KEY` or `NOVADA_BROWSER_WS`
+
+**When NOT to use:** If you want cleaned text (use `novada_extract` with `render="render"` first — it returns clean markdown). Structured platform data (use `novada_scrape`). This tool returns raw HTML.
+
+**Example:**
+```json
+{ "url": "https://example.com/protected", "render": "render" }
+```
+
+---
+
+### `novada_browser`
+
+**When:** You need to interact with a web page — click buttons, fill forms, scroll, take screenshots, or execute JavaScript. Up to 20 chained actions per session.
+
+**Key parameters:**
+- `actions` — ordered list of browser actions (max 20)
+- `session_id` — optional: maintain state (cookies, login) across multiple calls; sessions expire after 10 min of inactivity
+
+**Supported actions:** `navigate`, `click`, `type`, `screenshot`, `aria_snapshot`, `evaluate`, `wait`, `scroll`, `hover`, `press_key`, `select`
+
+**Requires:** `NOVADA_BROWSER_WS`
+
+**When NOT to use:** Simple page reading (use `novada_extract`). Structured data from a known platform (use `novada_scrape`). Raw HTML without interaction (use `novada_unblock`).
+
+**Example:**
+```json
+{
+  "actions": [
+    { "type": "navigate", "url": "https://example.com/login" },
+    { "type": "type", "selector": "#email", "text": "user@example.com" },
+    { "type": "type", "selector": "#password", "text": "pass" },
+    { "type": "click", "selector": "button[type=submit]" },
+    { "type": "aria_snapshot" }
+  ]
+}
+```
+
+---
+
+### `novada_health`
+
+**When:** First-time setup, diagnosing why a tool is failing, or confirming which Novada API products are active on your key.
+
+**Key parameters:** None required.
+
+**What it returns:** Status table for Search, Extract, Scraper API, Proxy, and Browser API — with activation links for any product not yet enabled.
+
+**When NOT to use:** This is a diagnostic tool only. Don't call it in production workflows unless you're debugging.
+
+**Example:**
+```json
+{}
 ```
 
 ---

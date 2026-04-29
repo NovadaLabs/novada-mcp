@@ -53,7 +53,9 @@ function shouldCrawlUrl(
 }
 
 export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise<string> {
-  const maxPages = Math.min(params.max_pages || 5, 20);
+  // Support intuitive alias param names
+  const maxPages = Math.min(params.max_pages ?? params.limit ?? 5, 20);
+  const strategy = params.strategy ?? params.mode ?? "bfs";
   const renderMode = params.render ?? "auto";
   let renderDetected = false;
   const visited = new Set<string>();
@@ -68,7 +70,7 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
   while (queue.length > 0 && results.length < maxPages) {
     const batch: { url: string; depth: number }[] = [];
     while (batch.length < CRAWL_CONCURRENCY && queue.length > 0 && results.length + batch.length < maxPages) {
-      const item = params.strategy === "dfs" ? queue.pop()! : queue.shift()!;
+      const item = strategy === "dfs" ? queue.pop()! : queue.shift()!;
       const normalizedUrl = normalizeUrl(item.url);
       if (visited.has(normalizedUrl)) continue;
       visited.add(normalizedUrl);
@@ -144,7 +146,7 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
   const lines: string[] = [
     `## Crawl Results`,
     `root: ${params.url}`,
-    `pages:${results.length} | strategy:${params.strategy || "bfs"} | total_words:${totalWords} | failed:${failedCount}${instructionsNote}`,
+    `pages:${results.length} | strategy:${strategy} | total_words:${totalWords} | failed:${failedCount}${instructionsNote}`,
     stoppedEarly && stopReason ? `note: Stopped early — ${stopReason}` : "",
     ``,
     `---`,

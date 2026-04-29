@@ -68,7 +68,9 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
   const typeLabel = TYPE_LABELS[params.type] ?? params.type;
 
   const maskedUrl = `http://${encodedUser}:***@${proxyEndpoint}`;
-  const [host, port] = proxyEndpoint.split(":");
+  const endpointParts = proxyEndpoint.split(":");
+  const proxyHost = endpointParts[0];
+  const proxyPort = endpointParts[1] ? parseInt(endpointParts[1]) : 7777;
 
   if (params.format === "env") {
     return [
@@ -116,7 +118,7 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
     `## Usage Examples`,
     ``,
     `Node.js (axios):`,
-    `  proxy: { host: "${host}", port: ${port || 7777}, auth: { username: "${username}", password: "<NOVADA_PROXY_PASS>" } }`,
+    `  proxy: { host: "${proxyHost}", port: ${proxyPort}, auth: { username: "${username}", password: "<NOVADA_PROXY_PASS>" } }`,
     ``,
     `Python (requests):`,
     `  proxies = { "http": "${maskedUrl}", "https": "${maskedUrl}" }`,

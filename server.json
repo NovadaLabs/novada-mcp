@@ -1,12 +1,12 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.goldentrii/novada-search",
-  "description": "Search the web (5 engines), extract content from any URL, crawl websites, map site structure, and run multi-step research — routed through 100M+ proxy IPs across 195 countries with anti-bot bypass.",
+  "description": "Search the web (5 engines), extract content from any URL, crawl websites, map site structure, run multi-step research, scrape 129 platforms, verify factual claims, unblock anti-bot pages, automate browser workflows, and check API health — routed through 100M+ proxy IPs across 195 countries.",
   "repository": {
     "url": "https://github.com/Goldentrii/novada-mcp",
     "source": "github"
   },
-  "version": "0.6.9",
+  "version": "0.8.3",
   "tools": [
     {
       "name": "novada_search",
@@ -31,6 +31,26 @@
     {
       "name": "novada_proxy",
       "description": "Get Novada residential proxy configuration for use in HTTP clients, curl, or shell scripts. Returns proxy URL, shell export commands, or curl --proxy flag. Requires NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars."
+    },
+    {
+      "name": "novada_scrape",
+      "description": "Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 129 platforms: Amazon, Reddit, TikTok, LinkedIn, Google Shopping, Glassdoor, GitHub, Zillow, Airbnb, and more. Best for: E-commerce product data, social posts/comments, job listings, reviews, real estate, market data. Output formats: \"markdown\" (default, agent-optimized table), \"json\" (structured, for programmatic use)."
+    },
+    {
+      "name": "novada_verify",
+      "description": "Use when you have a factual claim and need to check if it's supported by web sources. Runs 3 parallel searches (supporting, skeptical, fact-check angles) and returns a verdict: supported / unsupported / contested / insufficient_data. Best for: Checking claims before citing them, cross-validating research findings, detecting misinformation. Confidence 0–100 indicates certainty."
+    },
+    {
+      "name": "novada_unblock",
+      "description": "Use when you need the raw rendered HTML of a blocked or JS-heavy page. Forces JS rendering via Web Unblocker or Browser API. Returns raw HTML, not cleaned text. Best for: When you need raw HTML for custom DOM parsing. When novada_extract with render=\"render\" still fails. Use wait_for to specify a CSS selector to wait for before capturing HTML."
+    },
+    {
+      "name": "novada_browser",
+      "description": "Use when you need to interact with a web page — click buttons, fill forms, scroll, take screenshots, or execute JavaScript. Chain multiple actions in one call for efficiency. Best for: Login flows, paginated content, interactive SPAs, form submission, visual verification, scraping behind user interactions. Actions: navigate, click, type, screenshot, aria_snapshot, evaluate, wait, scroll, hover, press_key, select — up to 20 per call."
+    },
+    {
+      "name": "novada_health",
+      "description": "Check which Novada API products are active on your API key. Best for: First-time setup, diagnosing why a tool is failing, confirming your account has the right products activated. Returns: Status table for Search, Extract, Scraper API, Proxy, and Browser API — with activation links for anything not yet enabled."
     }
   ],
   "prompts": [
@@ -45,6 +65,14 @@
     {
       "name": "site_audit",
       "description": "Map a website structure then extract and summarize key sections"
+    },
+    {
+      "name": "scrape_platform_data",
+      "description": "Scrape structured data from a specific platform (Amazon, Reddit, TikTok, LinkedIn, etc.) using the Novada Scraper API"
+    },
+    {
+      "name": "browser_stateful_workflow",
+      "description": "Automate a multi-step browser workflow with persistent session state (login, form submission, paginated scraping)"
     }
   ],
   "resources": [
@@ -61,13 +89,18 @@
     {
       "uri": "novada://guide",
       "name": "Agent Tool Selection Guide",
-      "description": "Decision tree and workflow patterns for choosing between novada_search, extract, crawl, map, and research"
+      "description": "Decision tree and workflow patterns for choosing between all 11 novada tools: search, extract, crawl, map, research, proxy, scrape, verify, unblock, browser, health"
+    },
+    {
+      "uri": "novada://scraper-platforms",
+      "name": "Supported Scraper Platforms",
+      "description": "Full list of platforms supported by novada_scrape with their operation IDs and required parameters. Read this before calling novada_scrape to find the correct platform and operation for your use case."
     }
   ],
   "skills": [
     {
       "name": "novada-agent",
-      "description": "Tool selection guide for 6 Novada MCP tools — decision tree, key parameters, common workflows (research+extract, competitive analysis, full site docs, fresh news, proxy setup), and when NOT to use each tool.",
+      "description": "Tool selection guide for 11 Novada MCP tools — decision tree, key parameters, common workflows (research+extract, competitive analysis, full site docs, fresh news, proxy setup), and when NOT to use each tool.",
       "path": "skills/novada-agent/SKILL.md"
     }
   ],
@@ -77,7 +110,7 @@
     {
       "registryType": "npm",
       "identifier": "novada-search",
-      "version": "0.6.9",
+      "version": "0.8.3",
       "transport": {
         "type": "stdio"
       },

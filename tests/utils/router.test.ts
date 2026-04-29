@@ -69,6 +69,15 @@ describe("routeFetch", () => {
     expect(result.cost).toBe("medium");
   });
 
+  it("render mode falls back to render-failed when NOVADA_WEB_UNBLOCKER_KEY is absent", async () => {
+    delete process.env.NOVADA_WEB_UNBLOCKER_KEY;
+    mockAxiosGet(MOCK_HTML);
+    const result = await routeFetch("https://example.com", { render: "render", apiKey: "key" });
+    expect(result.mode).toBe("render-failed");
+    expect(result.cost).toBe("low");
+    expect(result.html).toBe(MOCK_HTML);
+  });
+
   it("browser mode calls Browser API", async () => {
     process.env.NOVADA_BROWSER_WS = "wss://test:test@example.com";
     mockBrowser(MOCK_HTML);

@@ -55,12 +55,13 @@ describe("novadaExtract", () => {
     expect(result).toContain("https://example.com/link2");
   });
 
-  it("throws when response is not HTML", async () => {
+  it("returns error string when response is not HTML (single URL)", async () => {
     mockedAxios.get.mockResolvedValue({ data: { json: true } });
 
-    await expect(
-      novadaExtract({ url: "https://example.com", format: "markdown" }, API_KEY)
-    ).rejects.toThrow("Response is not HTML");
+    const result = await novadaExtract({ url: "https://example.com", format: "markdown" }, API_KEY);
+    expect(result).toContain("## Extract Failed");
+    expect(result).toContain("Response is not HTML");
+    expect(result).toContain("## Agent Hints");
   });
 
   it("returns plain text when format is text", async () => {

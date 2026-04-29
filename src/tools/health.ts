@@ -44,7 +44,7 @@ async function probeSearch(apiKey: string): Promise<ProbeResult> {
     if (code === 0) return { status: "active", label: "Search API", latency };
     // 402 = key lacks SERP quota; 400 = API key not found in body
     if (code === 402 || code === 400) {
-      return { status: "not_activated", label: "Search API", latency, note: "visit dashboard.novada.com/overview/scraper/ — request SERP access" };
+      return { status: "not_activated", label: "Search API", latency, note: "dashboard.novada.com/overview/scraper/ — request SERP access" };
     }
     return { status: "not_activated", label: "Search API", latency, note: `code=${code ?? res.status}` };
   } catch (err) {
@@ -104,7 +104,7 @@ async function probeScraper(apiKey: string): Promise<ProbeResult> {
     if (code === 0) return { status: "active", label: "Scraper API (129 platforms)", latency };
     // 11006 = product not activated; 11000 = invalid key
     if (code === 11006) {
-      return { status: "not_activated", label: "Scraper API (129 platforms)", latency, note: "visit dashboard.novada.com/overview/scraper/ — contact support to enable Bearer token access" };
+      return { status: "not_activated", label: "Scraper API (129 platforms)", latency, note: "dashboard.novada.com/overview/scraper/ — contact support to enable Bearer token access" };
     }
     if (code === 11000) {
       return { status: "error", label: "Scraper API (129 platforms)", latency, note: "Invalid API key (11000)" };
@@ -174,7 +174,7 @@ export async function novadaHealth(apiKey: string): Promise<string> {
   const results: ProbeResult[] = [
     searchSettled.status === "fulfilled" ? searchSettled.value : { status: "error" as const, label: "Search API", latency: null, note: "probe threw unexpectedly" },
     extractSettled.status === "fulfilled" ? extractSettled.value : { status: "error" as const, label: "Web Unblocker / Extract", latency: null, note: "probe threw unexpectedly" },
-    scraperSettled.status === "fulfilled" ? scraperSettled.value : { status: "error" as const, label: "Scraper API (65+ platforms)", latency: null, note: "probe threw unexpectedly" },
+    scraperSettled.status === "fulfilled" ? scraperSettled.value : { status: "error" as const, label: "Scraper API (129 platforms)", latency: null, note: "probe threw unexpectedly" },
     probeProxy(),
     probeBrowser(),
   ];
@@ -219,7 +219,7 @@ export async function novadaHealth(apiKey: string): Promise<string> {
     lines.push("## Next Steps");
     for (const r of needsAction) {
       if (r.status === "not_activated") {
-        lines.push(`- ${r.label}: Go to ${r.note} to activate`);
+        lines.push(`- ${r.label}: Visit ${r.note} to activate`);
       } else if (r.status === "not_configured") {
         if (r.label === "Proxy") {
           lines.push(`- Proxy: Export NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT`);

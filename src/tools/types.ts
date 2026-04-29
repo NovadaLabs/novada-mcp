@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z, ZodError } from "zod";
 
 // ─── URL Safety ─────────────────────────────────────────────────────────────
 
@@ -27,7 +27,8 @@ const safeUrl = z.string()
 
 export const SearchParamsSchema = z.object({
   query: z.string().min(1, "Search query is required"),
-  engine: z.enum(["google", "bing", "duckduckgo", "yahoo", "yandex"]).default("google"),
+  engine: z.enum(["google", "bing", "duckduckgo", "yahoo", "yandex"]).default("google")
+    .describe("Search engine to use. 'google': best general relevance (default). 'bing': good for news and local. 'duckduckgo': privacy-focused. 'yahoo': broad index. 'yandex': Russian/Eastern European content."),
   num: z.number().int().min(1).max(20).default(10),
   country: z.string().default(""),
   language: z.string().default(""),
@@ -60,7 +61,8 @@ export const ExtractParamsSchema = z.object({
 export const CrawlParamsSchema = z.object({
   url: safeUrl,
   max_pages: z.number().int().min(1).max(20).default(5),
-  strategy: z.enum(["bfs", "dfs"]).default("bfs"),
+  strategy: z.enum(["bfs", "dfs"]).default("bfs")
+    .describe("Crawl traversal order. 'bfs' (default): breadth-first — visits all pages at current depth before going deeper, good for broad discovery. 'dfs': depth-first — follows links deeply before backtracking, good for exploring specific paths."),
   instructions: z.string().optional()
     .describe("Natural language hint for which pages to prioritize. E.g. 'only API reference pages', 'skip blog and changelog'. Applied as path-level filtering; semantic filtering is agent-side."),
   select_paths: z.array(z.string()).optional()
@@ -69,14 +71,21 @@ export const CrawlParamsSchema = z.object({
     .describe("Regex patterns for URL paths to skip entirely. E.g. ['/blog/.*', '/changelog/.*']."),
   render: z.enum(["auto", "static", "render"]).default("auto")
     .describe("Rendering mode. 'auto': uses static, escalates to render on first JS-heavy page detection. 'static': always static. 'render': always render (slower, handles JS sites)."),
+  limit: z.number().int().min(1).max(20).optional()
+    .describe("Alias for max_pages — use max_pages for the canonical name. Max 20."),
+  mode: z.enum(["bfs", "dfs"]).optional()
+    .describe("Alias for strategy — use strategy for the canonical name."),
 });
 
 export const ResearchParamsSchema = z.object({
-  question: z.string().min(5, "Research question must be at least 5 characters"),
+  question: z.string().min(5, "Research question must be at least 5 characters").optional(),
+  query: z.string().optional().describe("Alias for 'question' — use either"),
   depth: z.enum(["quick", "deep", "auto", "comprehensive"]).default("auto")
     .describe("'quick'=3 searches, 'deep'=5-6, 'comprehensive'=8-10, 'auto'=server decides based on question complexity."),
   focus: z.string().optional()
     .describe("Optional focus area to guide sub-query generation. E.g. 'technical implementation', 'business impact', 'recent news only'."),
+}).refine(data => !!(data.question || data.query), {
+  message: "Either 'question' or 'query' must be provided",
 });
 
 export const MapParamsSchema = z.object({
@@ -245,7 +254,7 @@ export function validateScrapeParamsFull(args: Record<string, unknown> | undefin
 export const UnblockParamsSchema = z.object({
   url: safeUrl,
   method: z.enum(["render", "browser"]).default("render")
-    .describe("'render': Web Unblocker with JS execution (faster, cheaper). 'browser': full Browser API via CDP (slower, handles complex SPAs)."),
+    .describe("Rendering method. 'render': JS rendering via Web Unblocker (requires NOVADA_WEB_UNBLOCKER_KEY). 'browser': full Chromium CDP (requires NOVADA_BROWSER_WS). Unlike novada_extract which uses 'render=', this tool uses 'method='."),
   country: z.string().length(2).optional()
     .describe("ISO 2-letter country code for geo-targeted rendering."),
   wait_for: z.string().optional()
@@ -356,6 +365,13 @@ export function classifyError(error: unknown): NovadaError {
         retryable: true,
       };
     }
+  }
+  if (error instanceof ZodError) {
+    return {
+      code: NovadaErrorCode.INVALID_PARAMS,
+      message: error.issues.map(i => `${i.path.join(".")}: ${i.message}`).join("; "),
+      retryable: false,
+    };
   }
   const rawMsg = error instanceof Error ? error.message : String(error);
   return {

@@ -46,6 +46,8 @@ export async function novadaUnblock(params: UnblockParams, apiKey?: string): Pro
     lines.push(`- Rendered via Web Unblocker (JS execution enabled).`);
   } else if (result.mode === "browser") {
     lines.push(`- Rendered via Browser API (full Chromium, highest fidelity).`);
+  } else if (result.mode === "render-failed") {
+    lines.push(`- Web Unblocker not configured — content fetched without JS rendering. Set NOVADA_WEB_UNBLOCKER_KEY to enable JS rendering.`);
   }
 
   return lines.join("\n");

@@ -9,18 +9,18 @@
   <a href="https://www.npmjs.com/package/novada-search"><img src="https://img.shields.io/npm/v/novada-search?style=for-the-badge&label=MCP&color=blue" alt="npm version"></a>
   <a href="https://lobehub.com/mcp/goldentrii-novada-search"><img src="https://lobehub.com/badge/mcp/goldentrii-novada-search" alt="MCP Badge"></a>
   <a href="https://smithery.ai/server/novada-search"><img src="https://img.shields.io/badge/Smithery-install-8B5CF6?style=for-the-badge" alt="Smithery"></a>
-  <a href="#tools"><img src="https://img.shields.io/badge/tools-10-brightgreen?style=for-the-badge" alt="10 tools"></a>
+  <a href="#tools"><img src="https://img.shields.io/badge/tools-11-brightgreen?style=for-the-badge" alt="11 tools"></a>
   <a href="#novada_search"><img src="https://img.shields.io/badge/engines-5-orange?style=for-the-badge" alt="5 engines"></a>
   <a href="#nova--cli"><img src="https://img.shields.io/badge/CLI-nova-blueviolet?style=for-the-badge" alt="CLI nova"></a>
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/proxy_IPs-100M+-red?style=for-the-badge" alt="100M+ proxy IPs"></a>
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/countries-195-cyan?style=for-the-badge" alt="195 countries"></a>
-  <img src="https://img.shields.io/badge/tests-258-green?style=for-the-badge" alt="258 tests">
+  <img src="https://img.shields.io/badge/tests-444-green?style=for-the-badge" alt="443 tests">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge" alt="MIT License"></a>
 </p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/novada-search"><img src="https://img.shields.io/npm/dt/novada-search" alt="downloads"></a>
-  <a href="https://github.com/Goldentrii/novada-search"><img src="https://img.shields.io/github/stars/Goldentrii/novada-search?style=social" alt="stars"></a>
+  <a href="https://github.com/NovadaLabs/novada-search"><img src="https://img.shields.io/github/stars/NovadaLabs/novada-search?style=social" alt="stars"></a>
 </p>
 
 
@@ -43,11 +43,7 @@
 
 **Claude Code:**
 ```bash
-claude mcp add novada -- npx -y novada-search
-```
-Then add your API key to Claude's MCP config:
-```json
-{ "env": { "NOVADA_API_KEY": "your_key" } }
+claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-search
 ```
 Get your key at [dashboard.novada.com](https://dashboard.novada.com).
 
@@ -429,7 +425,7 @@ Generate ready-to-use proxy credentials (residential, mobile, ISP, datacenter). 
 
 #### `novada_scrape`
 
-Structured data from 65+ platforms (Amazon, Reddit, TikTok, LinkedIn, Google Shopping…). Returns clean records — no HTML parsing needed.
+Structured data from 129 platforms (Amazon, Reddit, TikTok, LinkedIn, Google Shopping…). Returns clean records — no HTML parsing needed.
 
 > **Note:** Requires Scraper API product activation. Contact [novada.com](https://www.novada.com/) support if you see error 11006.
 
@@ -492,7 +488,7 @@ Cloud browser automation via CDP (Playwright). Execute up to 20 chained actions 
 |-----------|------|----------|---------|-------------|
 | `actions` | array | Yes | — | Ordered list of browser actions (max 20) |
 
-**Supported actions:** `navigate` · `click` · `type` · `screenshot` · `snapshot` · `evaluate` · `wait` · `scroll`
+**Supported actions:** `navigate` · `click` · `type` · `screenshot` · `aria_snapshot` · `evaluate` · `wait` · `scroll` · `hover` · `press_key` · `select`
 
 **Example:**
 ```json
@@ -502,7 +498,7 @@ Cloud browser automation via CDP (Playwright). Execute up to 20 chained actions 
     { "type": "type", "selector": "#email", "text": "user@example.com" },
     { "type": "type", "selector": "#password", "text": "pass" },
     { "type": "click", "selector": "button[type=submit]" },
-    { "type": "snapshot" }
+    { "type": "aria_snapshot" }
   ]
 }
 ```
@@ -530,6 +526,7 @@ Read-only data agents can access before deciding which tool to call.
 | `novada://engines` | All 5 engines with characteristics and use cases |
 | `novada://countries` | 195 country codes for geo-targeted search |
 | `novada://guide` | Decision tree for choosing between tools |
+| `novada://scraper-platforms` | 129 supported scraper platforms with valid operation IDs |
 
 ---
 
@@ -565,11 +562,11 @@ Read-only data agents can access before deciding which tool to call.
 | Website crawling | BFS/DFS + render modes | Yes | Yes (async) |
 | URL mapping | **Sitemap-first** (fast) | BFS only | Sitemap option |
 | Research | Yes | Yes | No |
-| **Platform scrapers** | **65+ platforms** | No | No |
+| **Platform scrapers** | **129 platforms** | No | No |
 | **Proxy tool** | **Residential/mobile/ISP** | No | No |
 | **Browser automation** | **Yes (CDP, 20 actions)** | No | No |
 | MCP Prompts | **3** | No | No |
-| MCP Resources | **3** | No | No |
+| MCP Resources | **4** | No | No |
 | Geo-targeting | **195 countries** | Country param | No |
 | Domain filtering | **include/exclude** | No | No |
 | JS rendering | Auto-escalation chain | No | Yes (agent mode) |
@@ -873,7 +870,7 @@ depth:deep (auto-selected) | searches:6 | results:28 | unique_sources:15
 
 #### `novada_scrape` — 平台结构化数据
 
-从 65+ 平台（Amazon、Reddit、TikTok、LinkedIn、Google Shopping 等）抓取结构化数据，无需手动解析 HTML。
+从 129 平台（Amazon、Reddit、TikTok、LinkedIn、Google Shopping 等）抓取结构化数据，无需手动解析 HTML。
 
 > **注意：** 需要激活 Scraper API 产品。如果遇到错误 11006，请联系 [novada.com](https://www.novada.com/) 客服。
 
@@ -969,11 +966,11 @@ Agent 在选择工具之前可以读取的参考数据。
 | 网站爬取 | BFS/DFS + 渲染模式 | 支持 | 支持（异步） |
 | URL 发现 | **Sitemap 优先**（快速） | 仅 BFS | Sitemap 选项 |
 | 深度研究 | 支持 | 支持 | 不支持 |
-| **平台数据爬取** | **65+ 平台** | 无 | 无 |
+| **平台数据爬取** | **129 平台** | 无 | 无 |
 | **代理工具** | **住宅/移动/ISP** | 无 | 无 |
 | **浏览器自动化** | **支持（CDP，20 步）** | 无 | 无 |
-| MCP Prompts | **3 个** | 无 | 无 |
-| MCP Resources | **3 个** | 无 | 无 |
+| MCP Prompts | **5 个** | 无 | 无 |
+| MCP Resources | **4 个** | 无 | 无 |
 | 地理定向 | **195 个国家** | 国家参数 | 无 |
 | 域名过滤 | **include/exclude** | 无 | 无 |
 | JS 渲染 | 自动升级链路 | 无 | 支持（agent 模式） |

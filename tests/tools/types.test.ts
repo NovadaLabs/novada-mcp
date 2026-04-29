@@ -221,6 +221,16 @@ describe("classifyError", () => {
     expect(err.code).toBe(NovadaErrorCode.UNKNOWN);
     expect(err.message).toBe("just a string");
   });
+
+  it("classifies ZodError as INVALID_PARAMS", () => {
+    const zodErr = new ZodError([
+      { code: "invalid_type", expected: "string", received: "number", path: ["query"], message: "Expected string, received number" },
+    ]);
+    const err = classifyError(zodErr);
+    expect(err.code).toBe(NovadaErrorCode.INVALID_PARAMS);
+    expect(err.retryable).toBe(false);
+    expect(err.message).toContain("query");
+  });
 });
 
 // ─── Unblock Params ────────────────────────────────────────────────────────

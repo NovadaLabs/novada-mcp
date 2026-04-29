@@ -34,6 +34,7 @@ import {
   validateBrowserParams,
   validateHealthParams,
   classifyError,
+  NovadaErrorCode,
 } from "./tools/index.js";
 import { ZodError } from "zod";
 import {
@@ -302,11 +303,17 @@ class NovadaMCPServer {
       } catch (error) {
         // Zod validation errors → clear message for the agent
         if (error instanceof ZodError) {
-          const issues = error.issues.map(i => `  ${i.path.join(".")}: ${i.message}`).join("\n");
+          const issues = error.issues.map(i => {
+            let msg = `  ${i.path.join(".")}: ${i.message}`;
+            if (i.code === "invalid_value" && "values" in i) {
+              msg += ` (valid values: ${(i.values as string[]).map(v => `'${v}'`).join(", ")})`;
+            }
+            return msg;
+          }).join("\n");
           return {
             content: [{
               type: "text" as const,
-              text: `Invalid parameters for ${name}:\n${issues}`,
+              text: `Invalid parameters for ${name}:\n${issues}\nNext step: Check parameter names and values — see tool description for valid options.`,
             }],
             isError: true,
           };
@@ -314,10 +321,20 @@ class NovadaMCPServer {
 
         // Classified API/network errors with retry guidance
         const classified = classifyError(error);
+        let nextStep = "";
+        if (classified.code === NovadaErrorCode.RATE_LIMITED) {
+          nextStep = "\nNext step: Wait 30 seconds before retrying.";
+        } else if (classified.code === NovadaErrorCode.URL_UNREACHABLE) {
+          nextStep = "\nNext step: Check the URL is correct, or try with render='render' for JS-heavy sites.";
+        } else if (classified.code === NovadaErrorCode.INVALID_PARAMS) {
+          nextStep = "\nNext step: Check parameter names and values — see tool description for valid options.";
+        } else if (classified.code === NovadaErrorCode.INVALID_API_KEY) {
+          nextStep = "\nNext step: Check NOVADA_API_KEY is set correctly. Run novada_health to verify API key status.";
+        }
         return {
           content: [{
             type: "text" as const,
-            text: `Error [${classified.code}]: ${classified.message}${classified.retryable ? "\n(This error is retryable)" : ""}${classified.docsUrl ? `\nDocs: ${classified.docsUrl}` : ""}`,
+            text: `Error [${classified.code}]: ${classified.message}${classified.retryable ? "\n(This error is retryable)" : ""}${classified.docsUrl ? `\nDocs: ${classified.docsUrl}` : ""}${nextStep}`,
           }],
           isError: true,
         };

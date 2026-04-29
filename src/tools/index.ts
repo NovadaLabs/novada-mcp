@@ -10,4 +10,4 @@ export { novadaUnblock } from "./unblock.js";
 export { novadaBrowser } from "./browser.js";
 export { novadaHealth } from "./health.js";
 export type { SearchParams, ExtractParams, CrawlParams, ResearchParams, MapParams, ProxyParams, ScrapeParams, VerifyParams, UnblockParams, BrowserParams, BrowserAction, NovadaSearchResult, NovadaApiResponse, HealthParams } from "./types.js";
-export { validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateProxyParams, validateScrapeParams, validateScrapeParamsFull, validateVerifyParams, validateUnblockParams, validateBrowserParams, validateHealthParams, classifyError } from "./types.js";
+export { validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateProxyParams, validateScrapeParams, validateScrapeParamsFull, validateVerifyParams, validateUnblockParams, validateBrowserParams, validateHealthParams, classifyError, NovadaErrorCode } from "./types.js";
