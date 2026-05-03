@@ -3,11 +3,11 @@
   <p align="center"><strong>Search, extract, crawl, map, and research the web — from any AI agent or terminal.</strong></p>
   <p align="center">Powered by <a href="https://www.novada.com">novada.com</a> — 100M+ proxy IPs across 195 countries.</p>
 </p>
+<a href="https://lobehub.com/mcp/novadalabs-novada-search-mcp"><img src="https://lobehub.com/badge/mcp-full/novadalabs-novada-search-mcp?theme=light" alt="MCP Badge"></a>
 
 <p align="center">
   <a href="https://www.novada.com"><img src="https://img.shields.io/badge/novada.com-API_Key-ff6b35?style=for-the-badge" alt="novada.com"></a>
   <a href="https://www.npmjs.com/package/novada-search"><img src="https://img.shields.io/npm/v/novada-search?style=for-the-badge&label=MCP&color=blue" alt="npm version"></a>
-<a href="https://lobehub.com/mcp/novadalabs-novada-search-mcp"><img src="https://lobehub.com/badge/mcp-full/novadalabs-novada-search-mcp?theme=light" alt="MCP Badge"></a>
   <a href="https://smithery.ai/server/novada-search"><img src="https://img.shields.io/badge/Smithery-install-8B5CF6?style=for-the-badge" alt="Smithery"></a>
   <a href="#tools"><img src="https://img.shields.io/badge/tools-11-brightgreen?style=for-the-badge" alt="11 tools"></a>
   <a href="#novada_search"><img src="https://img.shields.io/badge/engines-5-orange?style=for-the-badge" alt="5 engines"></a>
