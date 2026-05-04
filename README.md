@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">Novada Search MCP</h1>
+  <h1 align="center">Novada Search</h1>
   <p align="center"><strong>Search, extract, crawl, map, and research the web — from any AI agent or terminal.</strong></p>
   <p align="center">Powered by <a href="https://www.novada.com">novada.com</a> — 100M+ proxy IPs across 195 countries.</p>
 </p>
@@ -21,7 +21,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/novada-search"><img src="https://img.shields.io/npm/dt/novada-search" alt="downloads"></a>
-  <a href="https://github.com/NovadaLabs/novada-search"><img src="https://img.shields.io/github/stars/NovadaLabs/novada-search?style=social" alt="stars"></a>
+  <a href="https://github.com/NovadaLabs/novada-search-mcp"><img src="https://img.shields.io/github/stars/NovadaLabs/novada-search-mcp?style=social" alt="stars"></a>
 </p>
 
 

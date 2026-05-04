@@ -1,6 +1,6 @@
 {
   "name": "novada-search",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "MCP server for web search, extraction, crawling, and research — powered by Novada's 100M+ proxy IPs across 195 countries. Works with Claude, Cursor, VS Code, and any MCP client.",
   "mcpName": "io.github.goldentrii/novada-search",
   "type": "module",
@@ -69,10 +69,10 @@
   "homepage": "https://www.novada.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Goldentrii/novada-mcp.git"
+    "url": "git+https://github.com/NovadaLabs/novada-search-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/Goldentrii/novada-mcp/issues"
+    "url": "https://github.com/NovadaLabs/novada-search-mcp/issues"
   },
   "engines": {
     "node": ">=18.0.0"
