@@ -1,0 +1,4 @@
+# Benchmark results contain raw data + potentially large JSON files
+results/*.json
+results/*.html
+results/*.csv
