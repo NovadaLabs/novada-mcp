@@ -219,7 +219,8 @@ export function extractMainContent(html: string, baseUrl?: string, maxChars = 25
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const nestedInDataTable = $table.parents("table").filter((__: number, t: any) =>
         $(t).children("thead").children("tr").children("th").length > 0 ||
-        $(t).children("tr").children("th").length > 0
+        $(t).children("tr").children("th").length > 0 ||
+        $(t).children("tbody").children("tr").children("th").length > 0
       ).length > 0;
       if (nestedInDataTable) return;
       // Fall through: data table inside layout wrapper — render it

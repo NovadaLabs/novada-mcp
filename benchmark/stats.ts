@@ -13,11 +13,16 @@ const COST_PER_REQUEST: Record<ProviderName, number> = {
   tavily: 0.005,    // ~$5/1000 API calls (Researcher plan)
 };
 
-/** Compute percentile from sorted array */
+/** Compute percentile from sorted array using linear interpolation */
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
-  const idx = Math.ceil((p / 100) * sorted.length) - 1;
-  return sorted[Math.max(0, idx)];
+  if (sorted.length === 1) return sorted[0];
+  const rank = (p / 100) * (sorted.length - 1);
+  const lower = Math.floor(rank);
+  const upper = Math.ceil(rank);
+  if (lower === upper) return sorted[lower];
+  const fraction = rank - lower;
+  return sorted[lower] + fraction * (sorted[upper] - sorted[lower]);
 }
 
 /** Aggregate results for a specific provider+category combination */

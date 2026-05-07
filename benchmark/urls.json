@@ -40,7 +40,7 @@
     "https://web.dev/articles",
     "https://martinfowler.com/articles/",
     "https://www.joelonsoftware.com/",
-    "https://paul graham.com/articles.html",
+    "https://paulgraham.com/articles.html",
     "https://waitbutwhy.com/",
     "https://fs.blog/",
     "https://www.gatesnotes.com/",
@@ -65,7 +65,7 @@
     "https://vercel.com/docs",
     "https://vercel.com/templates",
     "https://supabase.com/docs",
-    "https://supabase.com/dashboard",
+    "https://supabase.com/docs",
     "https://linear.app/",
     "https://notion.so/product",
     "https://figma.com/community",
@@ -78,7 +78,7 @@
     "https://jsfiddle.net/",
     "https://observablehq.com/",
     "https://grafana.com/docs/grafana/latest/",
-    "https://app.datadoghq.com/",
+    "https://www.datadoghq.com/product/",
     "https://sentry.io/welcome/",
     "https://posthog.com/docs",
     "https://cal.com/",
@@ -153,8 +153,7 @@
     "https://www.ebay.com/",
     "https://www.wish.com/",
     "https://www.aliexpress.com/",
-    "https://www.shein.com/",
-    "https://stockx.com/"
+    "https://www.shein.com/"
   ],
   "structured": [
     "https://www.amazon.com/dp/B0D1XD1ZV3",

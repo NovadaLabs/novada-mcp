@@ -33,6 +33,7 @@
     "prepare": "npm run build",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
+    "benchmark": "tsx benchmark/run.ts",
     "prepublishOnly": "if [ -f .env ]; then echo 'ERROR: .env file present — delete test credentials before publishing'; exit 1; fi && npm run build"
   },
   "keywords": [
