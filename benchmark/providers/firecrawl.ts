@@ -34,8 +34,8 @@ export class FirecrawlProvider implements BenchmarkProvider {
             body: JSON.stringify({
               url,
               formats: ["markdown"],
-              waitFor: category === "js_heavy" ? 5000 : undefined,
-              timeout: Math.floor(timeout / 1000) * 1000,
+              waitFor: category === "js_heavy" || category === "anti_bot" ? 5000 : undefined,
+              timeout: Math.max(1000, Math.floor(timeout / 1000) * 1000),
             }),
             signal: controller.signal,
           });

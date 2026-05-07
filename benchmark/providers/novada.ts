@@ -44,18 +44,13 @@ export class NovadaProvider implements BenchmarkProvider {
       const client = await this.getClient();
 
       const { result, latencyMs } = await withLatency(async () => {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeout);
-
-        try {
-          const res = await client.extract(url, {
-            format: "markdown",
-            render: category === "js_heavy" || category === "anti_bot" ? "render" : "auto",
-          });
-          return res;
-        } finally {
-          clearTimeout(timer);
-        }
+        // Timeout is handled internally by the Novada SDK; no AbortController needed.
+        // Fair comparison: each provider uses its best available mode.
+        // Novada uses render mode for js_heavy and anti_bot (JS rendering + unblocking).
+        return await client.extract(url, {
+          format: "markdown",
+          render: category === "js_heavy" || category === "anti_bot" ? "render" : "auto",
+        });
       });
 
       const content = result.content || "";

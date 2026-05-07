@@ -267,7 +267,7 @@ async function extractSingle(
     ? ` | content_truncated:true | total_chars:${totalChars}`
     : "";
 
-  const contentOk = mainContent.length > 100 && usedMode !== "render-failed" && !stillJsHeavy && quality.score >= 10;
+  const contentOk = mainContent.length > 100 && usedMode !== "render-failed" && !stillJsHeavy && quality.score >= 40;
 
   const lines: string[] = [
     `## Extracted Content`,

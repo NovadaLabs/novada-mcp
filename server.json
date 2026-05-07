@@ -1,12 +1,12 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.goldentrii/novada-search",
+  "name": "io.github.NovadaLabs/novada-search",
   "description": "Search the web (5 engines), extract content from any URL, crawl websites, map site structure, run multi-step research, scrape 129 platforms, verify factual claims, unblock anti-bot pages, automate browser workflows, and check API health — routed through 100M+ proxy IPs across 195 countries.",
   "repository": {
-    "url": "https://github.com/Goldentrii/novada-mcp",
+    "url": "https://github.com/NovadaLabs/novada-search-mcp",
     "source": "github"
   },
-  "version": "0.8.3",
+  "version": "0.8.6",
   "tools": [
     {
       "name": "novada_search",
@@ -110,7 +110,7 @@
     {
       "registryType": "npm",
       "identifier": "novada-search",
-      "version": "0.8.3",
+      "version": "0.8.6",
       "transport": {
         "type": "stdio"
       },
