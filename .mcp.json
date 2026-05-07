@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "novada-search": {
+      "command": "npx",
+      "args": ["-y", "novada-search@latest"],
+      "env": {
+        "NOVADA_API_KEY": ""
+      }
+    }
+  }
+}
