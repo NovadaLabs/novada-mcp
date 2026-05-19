@@ -1,8 +1,7 @@
-import axios from "axios";
-import { USER_AGENT, normalizeUrl } from "../utils/index.js";
-import { SCRAPERAPI_BASE } from "../config.js";
-import type { ResearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
+import { normalizeUrl } from "../utils/index.js";
+import type { ResearchParams, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
+import { submitSearchScrapeTask, pollSearchResult, parseScraperSearchResults } from "./search.js";
 
 export async function novadaResearch(params: ResearchParams, apiKey: string): Promise<string> {
   // Support 'query' as alias for 'question' (matches other tools' param naming)
@@ -16,20 +15,13 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
 
   const queries = generateSearchQueries(params.question ?? "", isDeep, isComprehensive, params.focus);
 
-  // Execute all searches in parallel
+  // Execute all searches in parallel via Scraper API (google_search)
   const allResults = await Promise.all(
     queries.map(async (query): Promise<{ query: string; results: NovadaSearchResult[]; failed?: boolean }> => {
       try {
-        const response = await axios.post(
-          `${SCRAPERAPI_BASE}/search`,
-          { serpapi_query: { q: query, api_key: apiKey, engine: "google", num: "5" } },
-          { headers: { "Content-Type": "application/json", "User-Agent": USER_AGENT }, timeout: 30000 }
-        );
-
-        const data: NovadaApiResponse = response.data;
-        // code 402 = no SERP quota
-        if (data.code === 402 || data.code === 400) return { query, results: [], failed: true };
-        const results: NovadaSearchResult[] = data.data?.organic_results || data.organic_results || [];
+        const taskId = await submitSearchScrapeTask(apiKey, "google.com", "google_search", query, 5, "q");
+        const data = await pollSearchResult(apiKey, taskId);
+        const results = parseScraperSearchResults(data);
         return { query, results };
       } catch {
         return { query, results: [], failed: true };

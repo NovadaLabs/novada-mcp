@@ -1,47 +1,19 @@
-import axios, { AxiosError } from "axios";
-import { USER_AGENT } from "../utils/index.js";
-import { SCRAPERAPI_BASE } from "../config.js";
-import type { VerifyParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
-
-const SERP_UNAVAILABLE = `## Verify: Search Unavailable
-
-The Novada SERP endpoint is not yet configured for this API key.
-
-**Alternatives while SERP is unavailable:**
-- \`novada_extract\` with a direct URL — e.g. \`https://www.google.com/search?q=your+query\`
-- \`novada_research\` — multi-source research without a dedicated search API
-
-Contact support@novada.com to enable SERP access for your account.`;
+import type { VerifyParams, NovadaSearchResult } from "./types.js";
+import { submitSearchScrapeTask, pollSearchResult, parseScraperSearchResults } from "./search.js";
 
 interface QueryResult {
   results: NovadaSearchResult[];
   failed: boolean;
-  unavailable: boolean;
 }
 
 async function runSearchQuery(query: string, apiKey: string): Promise<QueryResult> {
   try {
-    // SERP endpoint: POST scraperapi.novada.com/search with { serpapi_query: { ... } }
-    const response = await axios.post(
-      `${SCRAPERAPI_BASE}/search`,
-      { serpapi_query: { q: query, api_key: apiKey, engine: "google", num: "5" } },
-      {
-        headers: { "Content-Type": "application/json", "User-Agent": USER_AGENT },
-        timeout: 30000,
-      }
-    );
-    const data: NovadaApiResponse = response.data;
-    // code 402 = no SERP quota; code 400 = key missing
-    if (data.code === 402 || data.code === 400) {
-      return { results: [], failed: true, unavailable: true };
-    }
-    const results: NovadaSearchResult[] = data.data?.organic_results || data.organic_results || [];
-    return { results, failed: false, unavailable: false };
-  } catch (error) {
-    if (error instanceof AxiosError && (error.response?.status === 404 || error.response?.status === 402)) {
-      return { results: [], failed: true, unavailable: true };
-    }
-    return { results: [], failed: true, unavailable: false };
+    const taskId = await submitSearchScrapeTask(apiKey, "google.com", "google_search", query, 5, "q");
+    const data = await pollSearchResult(apiKey, taskId);
+    const results = parseScraperSearchResults(data);
+    return { results, failed: false };
+  } catch {
+    return { results: [], failed: true };
   }
 }
 
@@ -62,16 +34,10 @@ export async function novadaVerify(params: VerifyParams, apiKey: string): Promis
   );
 
   const queryResults: QueryResult[] = settled.map(r =>
-    r.status === "fulfilled" ? r.value : { results: [], failed: true, unavailable: false }
+    r.status === "fulfilled" ? r.value : { results: [], failed: true }
   );
 
   const [supportingResult, skepticalResult, neutralResult] = queryResults;
-
-  // If ALL searches hit 404 (SERP unavailable) → return unavailable message
-  const allUnavailable = queryResults.every(qr => qr.unavailable);
-  if (allUnavailable) {
-    return SERP_UNAVAILABLE;
-  }
 
   // Collect evidence
   const supportingEvidence = supportingResult.results.filter(r => r.description || r.snippet);

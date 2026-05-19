@@ -5,23 +5,19 @@ import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./type
 import { novadaExtract } from "./extract.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 
-// ---------------------------------------------------------------------------
-// Scraper-API fallback for search engines (google/bing/duckduckgo/yandex)
-// Used when the SERP endpoint returns 402 (no SERP quota on this API key).
-// ---------------------------------------------------------------------------
-
 const SCRAPER_SEARCH_ENGINES = new Set(["google", "bing", "duckduckgo", "yandex"]);
 
 interface ScraperSearchEngine {
   scraper_name: string;
   scraper_id: string;
+  query_param: string;  // canonical query field name for this engine
 }
 
 const ENGINE_MAP: Record<string, ScraperSearchEngine> = {
-  google:     { scraper_name: "google.com",     scraper_id: "google_search"     },
-  bing:       { scraper_name: "bing.com",        scraper_id: "bing_search"       },
-  duckduckgo: { scraper_name: "duckduckgo.com",  scraper_id: "duckduckgo_search" },
-  yandex:     { scraper_name: "yandex.com",      scraper_id: "yandex_search"     },
+  google:     { scraper_name: "google.com",     scraper_id: "google_search", query_param: "q"       },
+  bing:       { scraper_name: "bing.com",        scraper_id: "bing_search",   query_param: "keyword" },
+  duckduckgo: { scraper_name: "duckduckgo.com",  scraper_id: "duckduckgo",    query_param: "keyword" },
+  yandex:     { scraper_name: "yandex.com",      scraper_id: "yandex",        query_param: "keyword" },
 };
 
 function scraperSleep(ms: number): Promise<void> {
@@ -29,19 +25,20 @@ function scraperSleep(ms: number): Promise<void> {
 }
 
 /** Submit a search task via the Scraper API and return the task_id. */
-async function submitSearchScrapeTask(
+export async function submitSearchScrapeTask(
   apiKey: string,
   scraperName: string,
   scraperId: string,
   query: string,
-  num: number
+  num: number,
+  queryParam = "q"
 ): Promise<string> {
   const form = new URLSearchParams();
   form.append("scraper_name", scraperName);
   form.append("scraper_id", scraperId);
   form.append("scraper_errors", "true");
   form.append("is_auto_push", "false");
-  form.append("q", query);
+  form.append(queryParam, query);
   form.append("num", String(num));
   form.append("json", "1");
 
@@ -70,7 +67,7 @@ async function submitSearchScrapeTask(
 }
 
 /** Poll the download endpoint until the search task completes or times out. */
-async function pollSearchResult(apiKey: string, taskId: string): Promise<Record<string, unknown>> {
+export async function pollSearchResult(apiKey: string, taskId: string): Promise<Record<string, unknown>> {
   const url = `${SCRAPER_DOWNLOAD_BASE}/scraper_download?task_id=${encodeURIComponent(taskId)}&file_type=json&apikey=${encodeURIComponent(apiKey)}`;
   const deadline = Date.now() + 90_000;
 
@@ -111,7 +108,7 @@ async function pollSearchResult(apiKey: string, taskId: string): Promise<Record<
 }
 
 /** Parse scraper API result data into NovadaSearchResult[]. */
-function parseScraperSearchResults(data: Record<string, unknown>): NovadaSearchResult[] {
+export function parseScraperSearchResults(data: Record<string, unknown>): NovadaSearchResult[] {
   const organic = (
     data.organic_results ?? data.organic ?? data.results ?? data.items ?? []
   );
@@ -203,7 +200,8 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     engineCfg.scraper_name,
     engineCfg.scraper_id,
     params.query,
-    params.num || 10
+    params.num || 10,
+    engineCfg.query_param
   );
   const resultData = await pollSearchResult(apiKey, taskId);
   scraperResults = parseScraperSearchResults(resultData);
