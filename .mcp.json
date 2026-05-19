@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "novada-search": {
+    "novada-dev": {
       "command": "node",
       "args": ["/Users/tongwu/Projects/novada-mcp/build/index.js"],
       "env": {
