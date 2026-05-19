@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">Novada MCP 服务器</h1>
+  <h1 align="center">Novada MCP</h1>
   <p align="center"><strong>在任意 AI 智能体或终端中搜索、提取、爬取、映射和研究网络内容。</strong></p>
   <p align="center">由 <a href="https://www.novada.com">novada.com</a> 提供支持 — 覆盖 195 个国家的 1 亿+ 代理 IP。</p>
 </p>
@@ -18,7 +18,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/novada"><img src="https://img.shields.io/npm/dt/novada" alt="下载量"></a>
-  <a href="https://github.com/NovadaLabs/Novada"><img src="https://img.shields.io/github/stars/NovadaLabs/Novada?style=social" alt="收藏量"></a>
+  <a href="https://github.com/NovadaLabs/novada-mcp"><img src="https://img.shields.io/github/stars/NovadaLabs/novada-mcp?style=social" alt="收藏量"></a>
 </p>
 
 <p align="center">
@@ -47,7 +47,7 @@
 ## `nova` — 命令行工具
 
 ```bash
-npm install -g novada
+npm install -g novada-mcp
 export NOVADA_API_KEY=你的密钥    # 在 novada.com 免费获取
 ```
 
@@ -67,12 +67,12 @@ nova research "AI 代理如何使用网络抓取？" --depth deep --focus "生�
 ### Claude Code（一条命令）
 
 ```bash
-claude mcp add novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada
+claude mcp add novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada-mcp
 ```
 
 所有项目生效（`--scope user`）：
 ```bash
-claude mcp add --scope user novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada
+claude mcp add --scope user novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada-mcp
 ```
 
 ### Smithery（一键安装）
@@ -92,7 +92,7 @@ npx -y @smithery/cli install novada --client claude
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada"],
+      "args": ["-y", "novada-mcp"],
       "env": { "NOVADA_API_KEY": "你的密钥" }
     }
   }
@@ -105,7 +105,7 @@ npx -y @smithery/cli install novada --client claude
   "servers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada"],
+      "args": ["-y", "novada-mcp"],
       "env": { "NOVADA_API_KEY": "你的密钥" }
     }
   }
@@ -118,7 +118,7 @@ npx -y @smithery/cli install novada --client claude
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada"],
+      "args": ["-y", "novada-mcp"],
       "env": { "NOVADA_API_KEY": "你的密钥" }
     }
   }
@@ -131,7 +131,7 @@ npx -y @smithery/cli install novada --client claude
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada"],
+      "args": ["-y", "novada-mcp"],
       "env": { "NOVADA_API_KEY": "你的密钥" }
     }
   }

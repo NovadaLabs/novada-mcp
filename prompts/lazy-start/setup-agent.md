@@ -77,7 +77,7 @@ novada entry:
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada"],
+      "args": ["-y", "novada-mcp"],
       "env": {
         "NOVADA_API_KEY": "<NOVADA_API_KEY>",
         "NOVADA_PROXY_USER": "<NOVADA_PROXY_USER>",
@@ -198,7 +198,7 @@ C. 两者都没有 → 创建 .env 文件，并输出 claude mcp add 命令
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada"],
+      "args": ["-y", "novada-mcp"],
       "env": {
         "NOVADA_API_KEY": "<你的Key>",
         "NOVADA_PROXY_USER": "<代理用户名>",

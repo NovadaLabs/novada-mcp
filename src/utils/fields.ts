@@ -136,6 +136,65 @@ function matchHeadingSection(text: string, field: string): string | null {
   return firstNonEmpty?.trim() ?? null;
 }
 
+export interface HeadingSectionResult {
+  value: string | null;
+  reason: "matched" | "no_heading_match" | "section_empty";
+}
+
+/**
+ * Like matchHeadingSection but returns a reason alongside the value.
+ * Zero impact on existing callers of matchHeadingSection.
+ */
+export function matchHeadingSectionWithReason(text: string, field: string): HeadingSectionResult {
+  const escapedField = field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const lines = text.split("\n");
+  let inSection = false;
+  const sectionLines: string[] = [];
+  const headingRe = new RegExp(`^#+\\s+${escapedField}\\s*$`, "i");
+  const nextHeadingRe = /^#+\s/;
+  for (const line of lines) {
+    if (!inSection) {
+      if (headingRe.test(line)) {
+        inSection = true;
+      }
+      continue;
+    }
+    if (nextHeadingRe.test(line)) break;
+    sectionLines.push(line);
+  }
+  if (!inSection) {
+    return { value: null, reason: "no_heading_match" };
+  }
+  const firstNonEmpty = sectionLines.find(l => {
+    const t = l.trim();
+    if (t.length <= 2) return false;
+    if (t.startsWith("```") || t.startsWith("~~~")) return false;
+    return true;
+  });
+  if (!firstNonEmpty) {
+    return { value: null, reason: "section_empty" };
+  }
+  return { value: firstNonEmpty.trim(), reason: "matched" };
+}
+
+export type DiagnosticMethod = "heading-match" | "pattern-match" | "meta-tag";
+export type DiagnosticReasonCode =
+  | "no_heading_match"
+  | "section_empty"
+  | "no_pattern_match"
+  | "page_too_short";
+
+export interface FieldDiagnostic {
+  field: string;
+  matched: boolean;
+  /** Only set when matched === true */
+  method?: DiagnosticMethod;
+  /** Only set when matched === false */
+  reasonCode?: DiagnosticReasonCode;
+  /** Human-readable explanation for reasonCode */
+  reasonText?: string;
+}
+
 /**
  * Extract requested fields from structured data + markdown fallback.
  */
@@ -178,4 +237,107 @@ export function extractFields(
 
     return { field, value: "", source: "not_found" };
   });
+}
+
+/**
+ * Like extractFields but also returns per-field diagnostics explaining why each null occurred.
+ */
+export function extractFieldsWithDiagnostics(
+  fields: string[],
+  structuredData: StructuredData | null,
+  markdown: string,
+  htmlLength: number
+): { results: FieldResult[]; diagnostics: FieldDiagnostic[] } {
+  const results: FieldResult[] = [];
+  const diagnostics: FieldDiagnostic[] = [];
+
+  for (const field of fields) {
+    const lower = field.toLowerCase().trim();
+
+    // Short-circuit: page content too short to be real
+    if (htmlLength < 500) {
+      results.push({ field, value: "", source: "not_found" });
+      diagnostics.push({
+        field,
+        matched: false,
+        reasonCode: "page_too_short",
+        reasonText: `page HTML < 500 chars, likely blocked or empty response`,
+      });
+      continue;
+    }
+
+    // 1. Structured data
+    if (structuredData?.fields) {
+      const sdKeys = Object.keys(structuredData.fields);
+      const exact = sdKeys.find(k => k.toLowerCase() === lower);
+      const fuzzy = exact ?? sdKeys.find(k => k.toLowerCase().includes(lower) || lower.includes(k.toLowerCase()));
+      if (fuzzy) {
+        results.push({ field, value: structuredData.fields[fuzzy], source: "structured_data" });
+        diagnostics.push({ field, matched: true, method: "meta-tag" });
+        continue;
+      }
+    }
+
+    // 2. Known pattern matching
+    const patterns = PATTERN_MAP[lower];
+    if (patterns) {
+      const value = matchPatterns(markdown, patterns);
+      if (value) {
+        results.push({ field, value, source: "pattern" });
+        diagnostics.push({ field, matched: true, method: "pattern-match" });
+        continue;
+      }
+    }
+
+    // 3. Generic inline "field: value" pattern
+    const genericPattern = new RegExp(
+      `(?:^|\\n)(?:\\*\\*)?${field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\*\\*)?[:\\s]+([^\\n]{3,100})`,
+      "im"
+    );
+    const gm = markdown.match(genericPattern);
+    if (gm?.[1]) {
+      results.push({ field, value: gm[1].trim().replace(/\*\*/g, ""), source: "pattern" });
+      diagnostics.push({ field, matched: true, method: "pattern-match" });
+      continue;
+    }
+
+    // 4. Heading section fallback — use instrumented version to get reason
+    const headingResult = matchHeadingSectionWithReason(markdown, field);
+    if (headingResult.value !== null) {
+      results.push({ field, value: headingResult.value, source: "heading" });
+      diagnostics.push({ field, matched: true, method: "heading-match" });
+      continue;
+    }
+
+    // Not found — determine best reason code
+    if (headingResult.reason === "section_empty") {
+      results.push({ field, value: "", source: "not_found" });
+      diagnostics.push({
+        field,
+        matched: false,
+        reasonCode: "section_empty",
+        reasonText: `heading found but section had no non-fence content`,
+      });
+    } else if (patterns) {
+      // Had known patterns but none matched
+      results.push({ field, value: "", source: "not_found" });
+      diagnostics.push({
+        field,
+        matched: false,
+        reasonCode: "no_pattern_match",
+        reasonText: `fallback pattern search found no match`,
+      });
+    } else {
+      // No heading, no patterns — heading miss is the most descriptive reason
+      results.push({ field, value: "", source: "not_found" });
+      diagnostics.push({
+        field,
+        matched: false,
+        reasonCode: "no_heading_match",
+        reasonText: `no "${field}" heading found in page`,
+      });
+    }
+  }
+
+  return { results, diagnostics };
 }

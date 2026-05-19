@@ -75,15 +75,14 @@ export async function novadaProxyDedicated(params: ProxyDedicatedParams): Promis
       `session: ${params.session_id} (dedicated IP — never rotates)`,
       `proxy_url: ${maskedUrl}`,
       ``,
-      `# Copy these lines to your shell — replace *** with $NOVADA_PROXY_PASS:`,
-      `export HTTP_PROXY="${maskedUrl}"`,
-      `export HTTPS_PROXY="${maskedUrl}"`,
-      `export http_proxy="${maskedUrl}"`,
-      `export https_proxy="${maskedUrl}"`,
+      `export NOVADA_PROXY_PASS="<your-proxy-password>"  # Set this first`,
+      `export HTTP_PROXY="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export HTTPS_PROXY="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export http_proxy="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export https_proxy="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
       ``,
       `## agent_instruction`,
       `Exclusive datacenter IP. Best for high-trust platforms. No other user shares this IP — clean reputation guaranteed. For human-like IP appearance, use novada_proxy_residential instead.`,
-      `To get the actual proxy URL with credentials: substitute *** with the runtime value of the NOVADA_PROXY_PASS environment variable.`,
     ].join("\n");
   }
 

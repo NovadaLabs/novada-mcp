@@ -11,7 +11,7 @@ startCommand:
     required:
       - novadaApiKey
   commandFunction: |
-    config => ({ command: 'npx', args: ['-y', 'novada'], env: { NOVADA_API_KEY: config.novadaApiKey } })
+    config => ({ command: 'npx', args: ['-y', 'novada-mcp'], env: { NOVADA_API_KEY: config.novadaApiKey } })
 tools:
   - name: novada_search
     description: "Search the web via Google, Bing, DuckDuckGo, Yahoo, or Yandex. Returns structured results with titles, URLs, snippets, and optional date filtering."

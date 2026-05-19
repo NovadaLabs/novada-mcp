@@ -68,6 +68,32 @@ async function novadaMapInner(
   baseHostname: string,
   origin: string,
 ): Promise<string> {
+  // --- Binary content detection: PDF, ZIP, images — these have no HTML links ---
+  const urlPath = new URL(params.url).pathname.toLowerCase();
+  const binaryExtensions = ['.pdf', '.zip', '.tar', '.gz', '.exe', '.dmg', '.pkg', '.deb', '.rpm', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.mp4', '.mp3', '.png', '.jpg', '.jpeg', '.gif', '.svg'];
+  if (binaryExtensions.some(ext => urlPath.endsWith(ext))) {
+    const ext = urlPath.split('.').pop() ?? 'binary';
+    return [
+      `## Site Map`,
+      `root: ${params.url}`,
+      `urls:0`,
+      ``,
+      `---`,
+      ``,
+      `⚠ Binary content detected: this URL serves a .${ext} file, not an HTML page.`,
+      ``,
+      `## Agent Hints`,
+      `- novada_map only works with HTML web pages that contain links.`,
+      `- For PDF content, use novada_extract to get the text content of the document.`,
+      `- For binary files (images, archives), download them directly.`,
+      ``,
+      `## Agent Notice — Under-delivery`,
+      `requested: ${maxUrls} | returned: 0 | shortfall: ${maxUrls}`,
+      `reason: URL points to a .${ext} binary file — no HTML links to discover.`,
+      `next_steps: Use novada_extract to read the document content.`,
+    ].join("\n");
+  }
+
   // --- Phase 1: Try sitemap discovery ---
   const sitemapUrls = await discoverViaSitemap(origin, apiKey, maxUrls);
 
