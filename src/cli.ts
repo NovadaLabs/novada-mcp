@@ -11,7 +11,7 @@
  *   novadaresearch "How do AI agents use web scraping?"
  */
 
-import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaProxy, novadaScrape, novadaVerify, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateProxyParams, validateScrapeParamsFull, validateVerifyParams } from "./tools/index.js";
+import { novadaSearch, novadaExtract, novadaCrawl, novadaResearch, novadaMap, novadaProxy, novadaScrape, novadaVerify, novadaHealth, validateSearchParams, validateExtractParams, validateCrawlParams, validateResearchParams, validateMapParams, validateProxyParams, validateScrapeParamsFull, validateVerifyParams } from "./tools/index.js";
 import { VERSION } from "./config.js";
 
 const API_KEY = process.env.NOVADA_API_KEY;
@@ -31,6 +31,7 @@ Usage:
   novadascrape --platform amazon.com --operation amazon_product_by-keywords --keyword "iphone 16"
               [--num 10] [--format markdown|json|csv|html|xlsx] [--limit 20]
   novadaverify "<claim>" [--context "as of 2024"]
+  novadahealth
 
 Environment:
   NOVADA_API_KEY          Required. Scraper API key.
@@ -99,9 +100,9 @@ async function main() {
 
   const { positional, flags } = parseArgs(rest);
 
-  const noPositionalCommands = new Set(["proxy", "scrape"]);
+  const noPositionalCommands = new Set(["proxy", "scrape", "health"]);
   if (!positional && !noPositionalCommands.has(command)) {
-    console.error(`Error: ${command} requires an argument. Run 'novada--help' for usage.`);
+    console.error(`Error: ${command} requires an argument. Run 'novada --help' for usage.`);
     process.exit(1);
   }
 
@@ -223,8 +224,12 @@ async function main() {
         );
         break;
 
+      case "health":
+        result = await novadaHealth(API_KEY!);
+        break;
+
       default:
-        console.error(`Unknown command: ${command}. Run 'novada--help' for usage.`);
+        console.error(`Unknown command: ${command}. Run 'novada --help' for usage.`);
         process.exit(1);
     }
 
