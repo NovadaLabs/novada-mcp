@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
 import { USER_AGENT, cleanParams, rerankResults } from "../utils/index.js";
-import { SCRAPERAPI_BASE, SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
+import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
@@ -191,71 +191,24 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
 
   const cleaned = cleanParams(rawParams) as Record<string, string>;
 
-  let response;
-  let usedScraperFallback = false;
-  let scraperFallbackResults: NovadaSearchResult[] = [];
+  let scraperResults: NovadaSearchResult[] = [];
 
-  // For engines with Scraper API support, route directly — the SERP endpoint
-  // (scraperapi.novada.com/search) requires a separate quota that most API keys
-  // don't have. Going direct eliminates auth errors and confusing "unavailable" messages.
-  if (SCRAPER_SEARCH_ENGINES.has(engine)) {
-    const engineCfg = ENGINE_MAP[engine];
-    const taskId = await submitSearchScrapeTask(
-      apiKey,
-      engineCfg.scraper_name,
-      engineCfg.scraper_id,
-      params.query,
-      params.num || 10
-    );
-    const resultData = await pollSearchResult(apiKey, taskId);
-    scraperFallbackResults = parseScraperSearchResults(resultData);
-    usedScraperFallback = true;
-  } else {
-    // Non-Scraper-API engines: try the SERP endpoint
-    try {
-      response = await axios.post(
-        `${SCRAPERAPI_BASE}/search`,
-        { serpapi_query: cleaned },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "User-Agent": USER_AGENT,
-          },
-          timeout: 30000,
-        }
-      );
-    } catch (error) {
-      if (error instanceof AxiosError) {
-        return SERP_UNAVAILABLE;
-      } else {
-        throw error;
-      }
-    }
+  if (!SCRAPER_SEARCH_ENGINES.has(engine)) {
+    return SERP_UNAVAILABLE;
   }
 
-  // For non-Scraper-API engines that went through the SERP path, check response codes
-  if (!usedScraperFallback && response) {
-    const data: NovadaApiResponse = response.data;
-    if (data.code && data.code !== 200 && data.code !== 0) {
-      if (data.code === 401 || data.code === 403) {
-        throw makeNovadaError(
-          NovadaErrorCode.INVALID_API_KEY,
-          `Novada API authentication failed (code ${data.code}): ${data.msg || "Invalid or missing API key"}`
-        );
-      }
-      if (data.code === 429) {
-        throw makeNovadaError(
-          NovadaErrorCode.RATE_LIMITED,
-          `Novada API rate limit exceeded (code ${data.code}): ${data.msg || "Too many requests"}`
-        );
-      }
-      return SERP_UNAVAILABLE;
-    }
-  }
+  const engineCfg = ENGINE_MAP[engine];
+  const taskId = await submitSearchScrapeTask(
+    apiKey,
+    engineCfg.scraper_name,
+    engineCfg.scraper_id,
+    params.query,
+    params.num || 10
+  );
+  const resultData = await pollSearchResult(apiKey, taskId);
+  scraperResults = parseScraperSearchResults(resultData);
 
-  const results: NovadaSearchResult[] = usedScraperFallback
-    ? scraperFallbackResults
-    : (response!.data as NovadaApiResponse).data?.organic_results || (response!.data as NovadaApiResponse).organic_results || [];
+  const results: NovadaSearchResult[] = scraperResults;
   if (results.length === 0) {
     return [
       `## Search Results`,
@@ -323,9 +276,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
 
   const filterStr = activeFilters.length ? ` | ${activeFilters.join(" | ")}` : "";
 
-  const engineLabel = usedScraperFallback
-    ? `${engine} (via scraper-api)`
-    : engine;
+  const engineLabel = `${engine} (via scraper-api)`;
 
   const lines: string[] = [
     `## Search Results`,
