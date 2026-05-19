@@ -28,7 +28,7 @@ Usage:
   novadamap <url> [--search <term>] [--limit 50] [--max-depth 2]
   novadaresearch <question> [--depth auto|quick|deep|comprehensive] [--focus "technical"]
   novadaproxy [--type residential|mobile|isp|datacenter] [--country us] [--format url|env|curl]
-  novadascrape --platform amazon.com --operation amazon_product_by-keywords --keyword "iphone 16"
+  novadascrape --platform amazon.com --operation amazon_product_keywords --keyword "iphone 16"
               [--num 10] [--format markdown|json|csv|html|xlsx] [--limit 20]
   novadaverify "<claim>" [--context "as of 2024"]
   novadahealth
@@ -50,7 +50,7 @@ Examples:
   novadamap https://example.com --search "pricing" --max-depth 3
   novadaresearch "How do AI agents use web scraping?" --depth deep --focus "production use cases"
   novadaproxy --type residential --country us --format env
-  novadascrape --platform amazon.com --operation amazon_product_by-keywords --keyword "iphone 16" --num 5 --format csv
+  novadascrape --platform amazon.com --operation amazon_product_keywords --keyword "iphone 16" --num 5 --format csv
   novadascrape --platform reddit.com --operation reddit_posts_by-keywords --keyword "AI agents" --num 10
   novadaverify "The Eiffel Tower is 330 meters tall" --context "as of 2024"
 `;

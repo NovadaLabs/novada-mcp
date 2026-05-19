@@ -81,7 +81,7 @@ async function submitScrapeTask(
     if (body.code === 11006) {
       throw makeNovadaError(
         NovadaErrorCode.PRODUCT_UNAVAILABLE,
-        "Scraper API Bearer token access not activated on this account. Note: the dashboard UI works via cookie auth — this is a different access tier. Contact your Novada account manager to enable direct API access (Bearer token).",
+        `Scraper returned code 11006 for operation '${scraper_id}'. This means either: (1) the operation ID is invalid or unsupported for this account, or (2) Scraper API access is not activated. Verify the operation ID against novada://scraper-platforms before assuming it is an account issue.`,
         "code 11006",
       );
     }
@@ -212,8 +212,15 @@ function extractRecords(data: unknown): Record<string, unknown>[] {
   return [];
 }
 
+// Aliases for stale operation IDs that appeared in old docs/examples
+const OPERATION_ALIASES: Record<string, string> = {
+  "amazon_product_by-keywords": "amazon_product_keywords",
+  "amazon_product_by-asin":     "amazon_product_asin",
+};
+
 export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, apiKey: string): Promise<string> {
-  const { platform, operation, params: opParams, format, limit } = params;
+  const { platform, params: opParams, format, limit } = params;
+  const operation = OPERATION_ALIASES[params.operation] ?? params.operation;
 
   try {
   // Step 1: Submit task
@@ -344,8 +351,8 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
       return JSON.stringify({
         status: "unavailable",
         code: 11006,
-        reason: "Scraper API not yet activated on this account.",
-        agent_instruction: "Activate Scraper API at dashboard.novada.com/overview/scraper/ before retrying. Do not retry this call automatically — this is a plan-tier gate, not a transient error.",
+        reason: "Scraper returned code 11006 — invalid operation ID or Scraper API not activated.",
+        agent_instruction: "First verify the operation ID against novada://scraper-platforms resource. If the operation ID is correct, activate Scraper API at dashboard.novada.com/overview/scraper/. Do not retry automatically.",
         alternatives: [
           "Use novada_extract for general web page content extraction.",
           "Use novada_unblock for bot-protected pages.",

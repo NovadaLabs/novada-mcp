@@ -195,7 +195,7 @@ Not for:
 **Best for:** E-commerce product data, social posts/comments, job listings, reviews, real estate, market data.
 **Not for:** General web pages (use novada_extract), unknown domains not in the platform list (use novada_crawl).
 **Output formats:** "markdown" (default, agent-optimized table), "json" (structured, for programmatic use).
-**Example:** platform="amazon.com", operation="amazon_product_by-keywords", params={keyword:"iphone 16", num:5}
+**Example:** platform="amazon.com", operation="amazon_product_keywords", params={keyword:"iphone 16", num:5}
 **Discover platforms:** Read the \`novada://scraper-platforms\` MCP resource for the complete platform list with operation IDs and required params.`,
     inputSchema: zodToMcpSchema(ScrapeParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: false, destructiveHint: false, openWorldHint: true },

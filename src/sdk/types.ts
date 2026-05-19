@@ -70,7 +70,7 @@ export interface ProxyConfig {
 export interface ScrapeResult {
   /** Platform domain (e.g. 'amazon.com') */
   platform: string;
-  /** Operation ID (e.g. 'amazon_product_by-keywords') */
+  /** Operation ID (e.g. 'amazon_product_keywords') */
   operation: string;
   /** Parsed records array (available when format='json') */
   records: Record<string, unknown>[];
