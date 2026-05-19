@@ -1,5 +1,5 @@
 {
-  "name": "novada-search",
+  "name": "novada",
   "version": "0.1.0",
   "description": "One MCP for all Novada products \u2014 search, scraping, proxy, browser, and more",
   "mcpName": "novada",
@@ -16,7 +16,8 @@
   },
   "types": "./build/index.d.ts",
   "bin": {
-    "novada-search": "build/index.js"
+    "novada": "build/index.js",
+    "nova": "build/cli.js"
   },
   "files": [
     "build",
@@ -69,10 +70,10 @@
   "homepage": "https://www.novada.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NovadaLabs/novada-search-mcp.git"
+    "url": "git+https://github.com/NovadaLabs/Novada.git"
   },
   "bugs": {
-    "url": "https://github.com/NovadaLabs/novada-search-mcp/issues"
+    "url": "https://github.com/NovadaLabs/Novada/issues"
   },
   "engines": {
     "node": ">=18.0.0"

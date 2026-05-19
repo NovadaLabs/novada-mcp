@@ -65,7 +65,7 @@ claude
 ### Option 2: Kill only stale Novada MCP processes (no full app restart)
 
 ```bash
-pkill -f "novada-search"
+pkill -f "novada"
 pkill -f "novada-proxy-mcp"
 ```
 
@@ -169,4 +169,4 @@ All Novada products in one MCP — contact [sales@novada.com](mailto:sales@novad
 ## Links
 
 - Docs and API key: [novada.com](https://www.novada.com)
-- Issues: [github.com/NovadaLabs/novada-search-mcp/issues](https://github.com/NovadaLabs/novada-search-mcp/issues)
+- Issues: [github.com/NovadaLabs/Novada/issues](https://github.com/NovadaLabs/Novada/issues)
