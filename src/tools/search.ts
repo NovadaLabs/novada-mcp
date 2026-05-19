@@ -195,69 +195,48 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   let usedScraperFallback = false;
   let scraperFallbackResults: NovadaSearchResult[] = [];
 
-  try {
-    // SERP endpoint uses POST with JSON body { serpapi_query: { ... } }
-    // Domain: scraperapi.novada.com (not scraper.novada.com)
-    response = await axios.post(
-      `${SCRAPERAPI_BASE}/search`,
-      { serpapi_query: cleaned },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent": USER_AGENT,
-        },
-        timeout: 30000,
-      }
+  // For engines with Scraper API support, route directly — the SERP endpoint
+  // (scraperapi.novada.com/search) requires a separate quota that most API keys
+  // don't have. Going direct eliminates auth errors and confusing "unavailable" messages.
+  if (SCRAPER_SEARCH_ENGINES.has(engine)) {
+    const engineCfg = ENGINE_MAP[engine];
+    const taskId = await submitSearchScrapeTask(
+      apiKey,
+      engineCfg.scraper_name,
+      engineCfg.scraper_id,
+      params.query,
+      params.num || 10
     );
-  } catch (error) {
-    if (error instanceof AxiosError) {
-      const status = error.response?.status;
-      if (status === 402 || status === 404) {
-        // Try scraper-API fallback for supported engines
-        if (SCRAPER_SEARCH_ENGINES.has(engine)) {
-          const engineCfg = ENGINE_MAP[engine];
-          const taskId = await submitSearchScrapeTask(
-            apiKey,
-            engineCfg.scraper_name,
-            engineCfg.scraper_id,
-            params.query,
-            params.num || 10
-          );
-          const resultData = await pollSearchResult(apiKey, taskId);
-          scraperFallbackResults = parseScraperSearchResults(resultData);
-          usedScraperFallback = true;
-        } else {
-          return SERP_UNAVAILABLE;
+    const resultData = await pollSearchResult(apiKey, taskId);
+    scraperFallbackResults = parseScraperSearchResults(resultData);
+    usedScraperFallback = true;
+  } else {
+    // Non-Scraper-API engines: try the SERP endpoint
+    try {
+      response = await axios.post(
+        `${SCRAPERAPI_BASE}/search`,
+        { serpapi_query: cleaned },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent": USER_AGENT,
+          },
+          timeout: 30000,
         }
+      );
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        return SERP_UNAVAILABLE;
       } else {
         throw error;
       }
-    } else {
-      throw error;
     }
   }
 
-  // code 402 = key lacks SERP quota; code 400 = API key missing (should not happen)
-  if (!usedScraperFallback) {
-    const data: NovadaApiResponse = response!.data;
-    if (data.code === 402 || data.code === 400) {
-      if (SCRAPER_SEARCH_ENGINES.has(engine)) {
-        const engineCfg = ENGINE_MAP[engine];
-        const taskId = await submitSearchScrapeTask(
-          apiKey,
-          engineCfg.scraper_name,
-          engineCfg.scraper_id,
-          params.query,
-          params.num || 10
-        );
-        const resultData = await pollSearchResult(apiKey, taskId);
-        scraperFallbackResults = parseScraperSearchResults(resultData);
-        usedScraperFallback = true;
-      } else {
-        return SERP_UNAVAILABLE;
-      }
-    } else if (data.code && data.code !== 200 && data.code !== 0) {
-      // Map known Novada error codes to structured NovadaErrors with agent_instruction
+  // For non-Scraper-API engines that went through the SERP path, check response codes
+  if (!usedScraperFallback && response) {
+    const data: NovadaApiResponse = response.data;
+    if (data.code && data.code !== 200 && data.code !== 0) {
       if (data.code === 401 || data.code === 403) {
         throw makeNovadaError(
           NovadaErrorCode.INVALID_API_KEY,
@@ -270,16 +249,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
           `Novada API rate limit exceeded (code ${data.code}): ${data.msg || "Too many requests"}`
         );
       }
-      if (data.code === 503 || data.code === 502 || data.code === 500) {
-        throw makeNovadaError(
-          NovadaErrorCode.API_DOWN,
-          `Novada API is temporarily unavailable (code ${data.code}): ${data.msg || "Server error"}`
-        );
-      }
-      throw makeNovadaError(
-        NovadaErrorCode.API_DOWN,
-        `Novada API error (code ${data.code}): ${data.msg || "Unknown error"}`
-      );
+      return SERP_UNAVAILABLE;
     }
   }
 
