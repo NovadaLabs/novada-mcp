@@ -21,7 +21,7 @@ everything up automatically — zero manual copy-pasting.
 ## Auto-Setup Prompt (paste into Claude Code)
 
 ```
-You are a Novada MCP setup agent. Your job is to configure the novada-search
+You are a Novada MCP setup agent. Your job is to configure the novada
 MCP server for this machine by extracting credentials from the Novada dashboard
 via the user's existing Chrome session.
 
@@ -77,7 +77,7 @@ novada entry:
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-search"],
+      "args": ["-y", "novada"],
       "env": {
         "NOVADA_API_KEY": "<NOVADA_API_KEY>",
         "NOVADA_PROXY_USER": "<NOVADA_PROXY_USER>",
@@ -109,12 +109,12 @@ claude mcp add novada \
   -e NOVADA_PROXY_USER=<value> \
   -e NOVADA_PROXY_PASS=<value> \
   -e NOVADA_PROXY_ENDPOINT=<value> \
-  -- npx -y novada-search
+  -- npx -y novada
 ```
 
 ## Step 5 — Verify the configuration
 
-1. Restart the MCP subprocess: run `pkill -f "novada-search"` in the terminal.
+1. Restart the MCP subprocess: run `pkill -f "novada"` in the terminal.
 2. Call novada_health (if available) to confirm the API key is active.
 3. Call novada_proxy_residential with format="env" to confirm proxy credentials
    are loaded (output should show ${NOVADA_PROXY_PASS} as a shell placeholder,
@@ -150,7 +150,7 @@ manual fallback URL for that credential.
 
 ```
 你是 Novada MCP 配置助手。你的任务是：通过用户已登录的 Chrome 浏览器，
-从 Novada 控制台提取凭证，然后自动配置 novada-search MCP 服务器。
+从 Novada 控制台提取凭证，然后自动配置 novada MCP 服务器。
 
 ## 第一步 — 找到或打开 dashboard.novada.com
 
@@ -198,7 +198,7 @@ C. 两者都没有 → 创建 .env 文件，并输出 claude mcp add 命令
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada-search"],
+      "args": ["-y", "novada"],
       "env": {
         "NOVADA_API_KEY": "<你的Key>",
         "NOVADA_PROXY_USER": "<代理用户名>",
@@ -211,7 +211,7 @@ C. 两者都没有 → 创建 .env 文件，并输出 claude mcp add 命令
 
 ## 第五步 — 验证配置
 
-1. 执行 pkill -f "novada-search" 重启 MCP 子进程。
+1. 执行 pkill -f "novada" 重启 MCP 子进程。
 2. 调用 novada_health 确认 API Key 有效。
 3. 调用 novada_proxy_residential format="env" 确认代理凭证已加载。
 
@@ -250,7 +250,7 @@ claude mcp add novada \
   -e NOVADA_PROXY_USER=your_proxy_user \
   -e NOVADA_PROXY_PASS=your_proxy_pass \
   -e NOVADA_PROXY_ENDPOINT=your_proxy_endpoint \
-  -- npx -y novada-search
+  -- npx -y novada
 ```
 
 4. Verify:
