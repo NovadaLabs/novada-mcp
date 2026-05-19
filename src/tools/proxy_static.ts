@@ -79,15 +79,14 @@ export async function novadaProxyStatic(params: ProxyStaticParams): Promise<stri
       `session: ${params.session_id} (same IP every request — static)`,
       `proxy_url: ${maskedUrl}`,
       ``,
-      `# Copy these lines to your shell — replace *** with the value of $NOVADA_PROXY_PASS:`,
-      `export HTTP_PROXY="${maskedUrl}"`,
-      `export HTTPS_PROXY="${maskedUrl}"`,
-      `export http_proxy="${maskedUrl}"`,
-      `export https_proxy="${maskedUrl}"`,
+      `export NOVADA_PROXY_PASS="<your-proxy-password>"  # Set this first`,
+      `export HTTP_PROXY="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export HTTPS_PROXY="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export http_proxy="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export https_proxy="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
       ``,
       `## agent_instruction`,
       `Same IP every request. Best for accounts requiring consistent identity. This IP is dedicated to your session_id — do not share session_id across unrelated workflows.`,
-      `To get the actual proxy URL with credentials: substitute *** with the runtime value of the NOVADA_PROXY_PASS environment variable.`,
     ].join("\n");
   }
 

@@ -106,7 +106,7 @@ export async function novadaScraperSubmit(
         );
       }
       const knownMessages: Record<number, string> = {
-        10001: "Missing required parameters. Check that url and scraper_type are provided.",
+        10001: "Request rejected (code 10001). If url and scraper_type look correct, the Scraper API may not be activated on your account — check https://dashboard.novada.com/overview/scraper/ and activate it before retrying.",
         11000: "Invalid API key.",
       };
       const detail = knownMessages[body.code] ?? msg;

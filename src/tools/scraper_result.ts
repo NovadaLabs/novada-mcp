@@ -133,25 +133,6 @@ export async function novadaScraperResult(
     });
     const body = resp.data;
 
-    if (
-      body !== null &&
-      typeof body === "object" &&
-      !Array.isArray(body) &&
-      (body as Record<string, unknown>).code === 27202
-    ) {
-      // Still pending
-      return JSON.stringify(
-        {
-          status: "pending",
-          task_id,
-          agent_instruction:
-            "Task is still processing. Use novada_scraper_status to confirm status='complete' before calling novada_scraper_result.",
-        },
-        null,
-        2
-      );
-    }
-
     if (Array.isArray(body) && body.length > 0) {
       rawData = body;
       fetchedFromEndpoint = RESULT_DOWNLOAD_ENDPOINT;
@@ -231,6 +212,18 @@ export async function novadaScraperResult(
     } catch (statusErr: unknown) {
       if (statusErr instanceof AxiosError) {
         const status = statusErr.response?.status;
+        if (status === 404) {
+          return JSON.stringify(
+            {
+              status: "not_found",
+              task_id,
+              agent_instruction:
+                "No task with this task_id exists. Verify the task_id was returned from a successful novada_scraper_submit call. Tasks expire after 24 hours — re-submit if needed.",
+            },
+            null,
+            2
+          );
+        }
         if (status === 401 || status === 403) {
           throw makeNovadaError(
             NovadaErrorCode.INVALID_API_KEY,

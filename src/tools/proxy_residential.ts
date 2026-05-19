@@ -36,7 +36,7 @@ export function validateProxyResidentialParams(args: Record<string, unknown> | u
 function buildResidentialUsername(user: string, params: ProxyResidentialParams): string {
   const parts: string[] = [user];
   // Residential zone
-  parts.push("zone-residential");
+  parts.push("zone-res");
   if (params.country) parts.push(`country-${params.country.toLowerCase()}`);
   if (params.city) parts.push(`city-${params.city.toLowerCase().replace(/\s+/g, "")}`);
   if (params.session_id) parts.push(`session-${params.session_id}`);
@@ -89,15 +89,14 @@ export async function novadaProxyResidential(params: ProxyResidentialParams): Pr
       params.session_id ? `session: ${params.session_id} (sticky IP)` : `session: rotating (new IP per request)`,
       `proxy_url: ${maskedUrl}`,
       ``,
-      `# Copy these lines to your shell — replace *** with the value of $NOVADA_PROXY_PASS:`,
-      `export HTTP_PROXY="${maskedUrl}"`,
-      `export HTTPS_PROXY="${maskedUrl}"`,
-      `export http_proxy="${maskedUrl}"`,
-      `export https_proxy="${maskedUrl}"`,
+      `export NOVADA_PROXY_PASS="<your-proxy-password>"  # Set this first`,
+      `export HTTP_PROXY="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export HTTPS_PROXY="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export http_proxy="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
+      `export https_proxy="http://${encodedUser}:\${NOVADA_PROXY_PASS}@${endpoint}"`,
       ``,
       `## agent_instruction`,
       `Best for geo-restricted content. Use country param for targeting. Residential IPs from 100M+ real home devices pass anti-bot checks that datacenter IPs fail.`,
-      `To get the actual proxy URL with credentials: substitute *** with the runtime value of the NOVADA_PROXY_PASS environment variable.`,
     ].join("\n");
   }
 

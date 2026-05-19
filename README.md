@@ -1,11 +1,11 @@
-# novada
+# Novada MCP
 
 One MCP for all Novada products — search, scraping, proxy, browser, and more.
 
 ## Quick Install
 
 ```bash
-npx -y novada
+npx -y novada-mcp
 ```
 
 Set your API key before starting:
@@ -36,7 +36,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "novada": {
       "command": "npx",
-      "args": ["-y", "novada"],
+      "args": ["-y", "novada-mcp"],
       "env": {
         "NOVADA_API_KEY": "your_api_key_here"
       }
@@ -48,7 +48,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 For Claude Code:
 
 ```bash
-claude mcp add novada -e NOVADA_API_KEY=your_api_key_here -- npx -y novada
+claude mcp add novada -e NOVADA_API_KEY=your_api_key_here -- npx -y novada-mcp
 ```
 
 ## Refreshing MCP Configuration (when env changes are not picked up)
@@ -65,7 +65,7 @@ claude
 ### Option 2: Kill only stale Novada MCP processes (no full app restart)
 
 ```bash
-pkill -f "novada"
+pkill -f "novada-mcp"
 pkill -f "novada-proxy-mcp"
 ```
 
@@ -169,4 +169,4 @@ All Novada products in one MCP — contact [sales@novada.com](mailto:sales@novad
 ## Links
 
 - Docs and API key: [novada.com](https://www.novada.com)
-- Issues: [github.com/NovadaLabs/Novada/issues](https://github.com/NovadaLabs/Novada/issues)
+- Issues: [github.com/NovadaLabs/novada-mcp/issues](https://github.com/NovadaLabs/novada-mcp/issues)

@@ -272,11 +272,11 @@ export const UnblockParamsSchema = z.object({
   wait_for: z.string().optional()
     .describe("CSS selector to wait for before capturing HTML. E.g. '.price', '#product-title'."),
   wait_ms: z.number().int().min(0).max(100000).optional()
-    .describe("Max time in ms to wait for page to fully load before capture. Use when wait_for selector is unavailable. Max 100000ms."),
+    .describe("[NOT_IMPLEMENTED — reserved for future use] Max time in ms to wait for page to fully load before capture. Use when wait_for selector is unavailable. Max 100000ms."),
   block_resources: z.boolean().optional()
-    .describe("Block images, CSS, and video loading for faster captures. Reduces bandwidth and latency on image-heavy pages."),
+    .describe("[NOT_IMPLEMENTED — reserved for future use] Block images, CSS, and video loading for faster captures. Reduces bandwidth and latency on image-heavy pages."),
   auto_runs: z.number().int().min(1).max(10).optional()
-    .describe("Number of retry attempts if the page load fails or returns incomplete content. Default 2, max 10."),
+    .describe("[NOT_IMPLEMENTED — reserved for future use] Number of retry attempts if the page load fails or returns incomplete content. Default 2, max 10."),
   timeout: z.number().int().min(5000).max(120000).default(30000)
     .describe("Timeout in ms. Default 30000, max 120000."),
   max_chars: z.number().int().min(1000).max(500000).optional()

@@ -1,9 +1,134 @@
 import axios, { AxiosError } from "axios";
 import { USER_AGENT, cleanParams, rerankResults } from "../utils/index.js";
-import { SCRAPERAPI_BASE } from "../config.js";
+import { SCRAPERAPI_BASE, SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+
+// ---------------------------------------------------------------------------
+// Scraper-API fallback for search engines (google/bing/duckduckgo/yandex)
+// Used when the SERP endpoint returns 402 (no SERP quota on this API key).
+// ---------------------------------------------------------------------------
+
+const SCRAPER_SEARCH_ENGINES = new Set(["google", "bing", "duckduckgo", "yandex"]);
+
+interface ScraperSearchEngine {
+  scraper_name: string;
+  scraper_id: string;
+}
+
+const ENGINE_MAP: Record<string, ScraperSearchEngine> = {
+  google:     { scraper_name: "google.com",     scraper_id: "google_search"     },
+  bing:       { scraper_name: "bing.com",        scraper_id: "bing_search"       },
+  duckduckgo: { scraper_name: "duckduckgo.com",  scraper_id: "duckduckgo_search" },
+  yandex:     { scraper_name: "yandex.com",      scraper_id: "yandex_search"     },
+};
+
+function scraperSleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** Submit a search task via the Scraper API and return the task_id. */
+async function submitSearchScrapeTask(
+  apiKey: string,
+  scraperName: string,
+  scraperId: string,
+  query: string,
+  num: number
+): Promise<string> {
+  const form = new URLSearchParams();
+  form.append("scraper_name", scraperName);
+  form.append("scraper_id", scraperId);
+  form.append("scraper_errors", "true");
+  form.append("is_auto_push", "false");
+  form.append("q", query);
+  form.append("num", String(num));
+  form.append("json", "1");
+
+  const resp = await axios.post(`${SCRAPER_API_BASE}/request`, form, {
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    timeout: 60000,
+  });
+
+  const body = resp.data as { code: number; msg?: string; data: unknown };
+  if (body.code !== 0) {
+    throw new Error(`Scraper search submit error (code ${body.code}): ${body.msg ?? "unknown"}`);
+  }
+
+  const inner = body.data as Record<string, unknown> | null;
+  const taskId = (
+    (inner?.task_id as string | undefined) ??
+    ((inner?.data as Record<string, unknown> | undefined)?.task_id as string | undefined)
+  );
+  if (!taskId) {
+    throw new Error(`Scraper search submit: no task_id in response: ${JSON.stringify(body)}`);
+  }
+  return taskId;
+}
+
+/** Poll the download endpoint until the search task completes or times out. */
+async function pollSearchResult(apiKey: string, taskId: string): Promise<Record<string, unknown>> {
+  const url = `${SCRAPER_DOWNLOAD_BASE}/scraper_download?task_id=${encodeURIComponent(taskId)}&file_type=json&apikey=${encodeURIComponent(apiKey)}`;
+  const deadline = Date.now() + 90_000;
+
+  while (Date.now() < deadline) {
+    const resp = await axios.get(url, { timeout: 30000 });
+    const body = resp.data;
+
+    // Pending
+    if (body !== null && typeof body === "object" && !Array.isArray(body) &&
+        (body as Record<string, unknown>).code === 27202) {
+      await scraperSleep(2000);
+      continue;
+    }
+
+    // Complete: array of result items — take first successful item
+    if (Array.isArray(body) && body.length > 0) {
+      const first = body[0] as Record<string, unknown>;
+      // Wrapped envelope format
+      if ("rest" in first) {
+        return first.rest as Record<string, unknown>;
+      }
+      // Flat format — look for organic_results at top level
+      if ("organic_results" in first || "organic" in first) {
+        return first;
+      }
+      return first;
+    }
+
+    if (body !== null && typeof body === "object" && !Array.isArray(body)) {
+      const bErr = body as Record<string, unknown>;
+      throw new Error(`Scraper download error (code ${bErr.code ?? "?"}): ${bErr.msg ?? JSON.stringify(bErr).slice(0, 150)}`);
+    }
+
+    throw new Error(`Unexpected scraper download response: ${JSON.stringify(body).slice(0, 200)}`);
+  }
+
+  throw new Error(`Scraper search task ${taskId} timed out after 90s.`);
+}
+
+/** Parse scraper API result data into NovadaSearchResult[]. */
+function parseScraperSearchResults(data: Record<string, unknown>): NovadaSearchResult[] {
+  const organic = (
+    data.organic_results ?? data.organic ?? data.results ?? data.items ?? []
+  );
+  if (!Array.isArray(organic)) return [];
+
+  return (organic as Record<string, unknown>[]).map(item => ({
+    title: (item.title as string | undefined) ?? "",
+    url: (item.url as string | undefined) ?? (item.link as string | undefined) ?? "",
+    link: (item.link as string | undefined) ?? (item.url as string | undefined) ?? "",
+    snippet: (item.snippet as string | undefined) ?? (item.description as string | undefined) ?? "",
+    description: (item.description as string | undefined) ?? (item.snippet as string | undefined) ?? "",
+    published: (item.published as string | undefined) ?? (item.date as string | undefined),
+    date: (item.date as string | undefined) ?? (item.published as string | undefined),
+  }));
+}
+
+// ---------------------------------------------------------------------------
 
 const SERP_UNAVAILABLE = `## Search Unavailable
 
@@ -17,8 +142,23 @@ the Scraper API and Web Unblocker plans. Contact support@novada.com to enable it
 - \`novada_research\` — multi-source research using extract-based discovery
 - \`novada_map\` + \`novada_extract\` — discover and read pages from a known site`;
 
+const YAHOO_UNAVAILABLE = `## Search Unavailable — Yahoo
+
+Yahoo Search is not available on this account.
+
+## Agent Hints
+- Use engine="google" or engine="bing" — same query syntax, equivalent results.
+
+## Agent Notice — Engine Unavailable
+engine: yahoo | status: unsupported | suggested_alternatives: google, bing`;
+
 export async function novadaSearch(params: SearchParams, apiKey: string): Promise<string> {
   const engine = params.engine || "google";
+
+  // Yahoo has no scraper-API path — return a clear redirect message immediately.
+  if (engine === "yahoo") {
+    return YAHOO_UNAVAILABLE;
+  }
 
   const rawParams: Record<string, string> = {
     q: params.query,
@@ -52,6 +192,9 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   const cleaned = cleanParams(rawParams) as Record<string, string>;
 
   let response;
+  let usedScraperFallback = false;
+  let scraperFallbackResults: NovadaSearchResult[] = [];
+
   try {
     // SERP endpoint uses POST with JSON body { serpapi_query: { ... } }
     // Domain: scraperapi.novada.com (not scraper.novada.com)
@@ -69,49 +212,93 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   } catch (error) {
     if (error instanceof AxiosError) {
       const status = error.response?.status;
-      if (status === 404 || status === 402) {
-        return SERP_UNAVAILABLE;
+      if (status === 402 || status === 404) {
+        // Try scraper-API fallback for supported engines
+        if (SCRAPER_SEARCH_ENGINES.has(engine)) {
+          const engineCfg = ENGINE_MAP[engine];
+          const taskId = await submitSearchScrapeTask(
+            apiKey,
+            engineCfg.scraper_name,
+            engineCfg.scraper_id,
+            params.query,
+            params.num || 10
+          );
+          const resultData = await pollSearchResult(apiKey, taskId);
+          scraperFallbackResults = parseScraperSearchResults(resultData);
+          usedScraperFallback = true;
+        } else {
+          return SERP_UNAVAILABLE;
+        }
+      } else {
+        throw error;
       }
+    } else {
+      throw error;
     }
-    throw error;
   }
-
-  const data: NovadaApiResponse = response.data;
 
   // code 402 = key lacks SERP quota; code 400 = API key missing (should not happen)
-  if (data.code === 402 || data.code === 400) {
-    return SERP_UNAVAILABLE;
-  }
-
-  if (data.code && data.code !== 200 && data.code !== 0) {
-    // Map known Novada error codes to structured NovadaErrors with agent_instruction
-    if (data.code === 401 || data.code === 403) {
-      throw makeNovadaError(
-        NovadaErrorCode.INVALID_API_KEY,
-        `Novada API authentication failed (code ${data.code}): ${data.msg || "Invalid or missing API key"}`
-      );
-    }
-    if (data.code === 429) {
-      throw makeNovadaError(
-        NovadaErrorCode.RATE_LIMITED,
-        `Novada API rate limit exceeded (code ${data.code}): ${data.msg || "Too many requests"}`
-      );
-    }
-    if (data.code === 503 || data.code === 502 || data.code === 500) {
+  if (!usedScraperFallback) {
+    const data: NovadaApiResponse = response!.data;
+    if (data.code === 402 || data.code === 400) {
+      if (SCRAPER_SEARCH_ENGINES.has(engine)) {
+        const engineCfg = ENGINE_MAP[engine];
+        const taskId = await submitSearchScrapeTask(
+          apiKey,
+          engineCfg.scraper_name,
+          engineCfg.scraper_id,
+          params.query,
+          params.num || 10
+        );
+        const resultData = await pollSearchResult(apiKey, taskId);
+        scraperFallbackResults = parseScraperSearchResults(resultData);
+        usedScraperFallback = true;
+      } else {
+        return SERP_UNAVAILABLE;
+      }
+    } else if (data.code && data.code !== 200 && data.code !== 0) {
+      // Map known Novada error codes to structured NovadaErrors with agent_instruction
+      if (data.code === 401 || data.code === 403) {
+        throw makeNovadaError(
+          NovadaErrorCode.INVALID_API_KEY,
+          `Novada API authentication failed (code ${data.code}): ${data.msg || "Invalid or missing API key"}`
+        );
+      }
+      if (data.code === 429) {
+        throw makeNovadaError(
+          NovadaErrorCode.RATE_LIMITED,
+          `Novada API rate limit exceeded (code ${data.code}): ${data.msg || "Too many requests"}`
+        );
+      }
+      if (data.code === 503 || data.code === 502 || data.code === 500) {
+        throw makeNovadaError(
+          NovadaErrorCode.API_DOWN,
+          `Novada API is temporarily unavailable (code ${data.code}): ${data.msg || "Server error"}`
+        );
+      }
       throw makeNovadaError(
         NovadaErrorCode.API_DOWN,
-        `Novada API is temporarily unavailable (code ${data.code}): ${data.msg || "Server error"}`
+        `Novada API error (code ${data.code}): ${data.msg || "Unknown error"}`
       );
     }
-    throw makeNovadaError(
-      NovadaErrorCode.API_DOWN,
-      `Novada API error (code ${data.code}): ${data.msg || "Unknown error"}`
-    );
   }
 
-  const results: NovadaSearchResult[] = data.data?.organic_results || data.organic_results || [];
+  const results: NovadaSearchResult[] = usedScraperFallback
+    ? scraperFallbackResults
+    : (response!.data as NovadaApiResponse).data?.organic_results || (response!.data as NovadaApiResponse).organic_results || [];
   if (results.length === 0) {
-    return "No results found for this query.";
+    return [
+      `## Search Results`,
+      `results:0 | engine:${engine}`,
+      ``,
+      `No results found for: "${params.query}"`,
+      ``,
+      `## Agent Hints`,
+      `- Try a broader or rephrased query`,
+      `- Try a different engine: engine="duckduckgo" or engine="bing"`,
+      `- Use novada_research for multi-source investigation`,
+      `- Use novada_map + novada_extract if you have a known site`,
+    ].join("\n");
   }
 
   // Rerank by relevance to query
@@ -166,9 +353,13 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
 
   const filterStr = activeFilters.length ? ` | ${activeFilters.join(" | ")}` : "";
 
+  const engineLabel = usedScraperFallback
+    ? `${engine} (via scraper-api fallback)`
+    : engine;
+
   const lines: string[] = [
     `## Search Results`,
-    `results:${reranked.length} | engine:${engine} | reranked:true${filterStr}`,
+    `results:${reranked.length} | engine:${engineLabel} | reranked:true${filterStr}`,
     ``,
     `---`,
     ``,
