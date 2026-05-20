@@ -15,8 +15,8 @@ interface ScraperSearchEngine {
 
 const ENGINE_MAP: Record<string, ScraperSearchEngine> = {
   google:     { scraper_name: "google.com",     scraper_id: "google_search", query_param: "q"       },
-  bing:       { scraper_name: "bing.com",        scraper_id: "bing_search",   query_param: "keyword" },
-  duckduckgo: { scraper_name: "duckduckgo.com",  scraper_id: "duckduckgo",    query_param: "keyword" },
+  bing:       { scraper_name: "bing.com",        scraper_id: "bing_search",   query_param: "q" },
+  duckduckgo: { scraper_name: "duckduckgo.com",  scraper_id: "duckduckgo",    query_param: "q" },
   yandex:     { scraper_name: "yandex.com",      scraper_id: "yandex",        query_param: "keyword" },
 };
 
@@ -41,6 +41,10 @@ export async function submitSearchScrapeTask(
   form.append(queryParam, query);
   form.append("num", String(num));
   form.append("json", "1");
+  form.append("no_cache", "false");
+  if (scraperName === "bing.com") {
+    form.append("safe", "off");
+  }
 
   const resp = await axios.post(`${SCRAPER_API_BASE}/request`, form, {
     headers: {
