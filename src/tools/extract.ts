@@ -137,10 +137,14 @@ async function extractSingle(
       const pdf = await extractPdf(pdfBuffer);
       html = `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`;
     } else if (contentType.includes("application/json")) {
-      const jsonStr = typeof response.data === "string"
+      const body = typeof response.data === "string"
         ? response.data
         : JSON.stringify(response.data, null, 2);
-      return formatJsonExtract(params.url, "render", jsonStr, params.max_chars);
+      if (body.trimStart().startsWith("<")) {
+        html = body;
+      } else {
+        return formatJsonExtract(params.url, "render", body, params.max_chars);
+      }
     } else {
       if (typeof response.data !== "string") {
         throw makeNovadaError(
@@ -163,10 +167,14 @@ async function extractSingle(
       const pdf = await extractPdf(pdfBuffer);
       html = `pdf_pages:${pdf.pages}\n${pdf.title ? `title: ${pdf.title}\n` : ""}${pdf.text}`;
     } else if (contentType.includes("application/json")) {
-      const jsonStr = typeof response.data === "string"
+      const body = typeof response.data === "string"
         ? response.data
         : JSON.stringify(response.data, null, 2);
-      return formatJsonExtract(params.url, "static", jsonStr, params.max_chars);
+      if (body.trimStart().startsWith("<")) {
+        html = body;
+      } else {
+        return formatJsonExtract(params.url, "static", body, params.max_chars);
+      }
     } else {
       if (typeof response.data !== "string") {
         throw makeNovadaError(
@@ -329,6 +337,37 @@ async function extractSingle(
     } catch { /* keep static result */ }
   }
 
+  // P2-1: Wayback Machine auto-fallback — when content is very poor, try archive.org
+  let waybackFallback = false;
+  if (mainContent.length < 100 && quality.score < 20 && !html.startsWith("pdf_pages:")) {
+    try {
+      const archiveUrl = `https://web.archive.org/web/2024/${params.url}`;
+      const wbResponse = await fetchViaProxy(archiveUrl, apiKey);
+      if (typeof wbResponse.data === "string" && wbResponse.data.length > 500) {
+        const wbHtml = wbResponse.data;
+        const wbMain = extractMainContent(wbHtml, params.url);
+        if (wbMain.length > mainContent.length) {
+          html = wbHtml;
+          mainContent = wbMain;
+          title = extractTitle(wbHtml);
+          description = extractDescription(wbHtml);
+          allLinks = extractLinks(wbHtml, params.url);
+          sameDomainLinks = allLinks
+            .filter(link => {
+              try { return new URL(link).hostname.replace(/^www\./, "") === baseDomain; }
+              catch { return false; }
+            })
+            .slice(0, 15);
+          structuredData = extractStructuredData(wbHtml);
+          hasStructuredData = structuredData !== null;
+          quality = scoreExtraction(wbHtml, wbMain, usedMode, hasStructuredData);
+          if (quality.score === 0 && wbMain.length > 0) quality.score = 1;
+          waybackFallback = true;
+        }
+      }
+    } catch { /* Wayback unavailable — keep original result */ }
+  }
+
   // max_chars truncation for markdown format
   const totalChars = mainContent.length;
   let displayContent = mainContent;
@@ -391,15 +430,34 @@ async function extractSingle(
       hints: [] as string[],
       ...(pdfPages !== null ? { pdf: { pages: pdfPages, title: pdfTitle ?? null } } : {}),
       ...(autoEscalated ? { auto_escalated: true } : {}),
+      ...(waybackFallback ? { wayback_fallback: true } : {}),
     };
     // Build hints array
     const hints = jsonResult.hints as string[];
     if (redditUrl) hints.push("Reddit URL rewritten to old.reddit.com — new reddit.com blocks all scrapers.");
+    if (waybackFallback) hints.push("Content retrieved from Wayback Machine (archive.org) — the live page returned empty/blocked content. Data may be outdated.");
     try {
       const extractedHost = new URL(params.url).hostname.replace(/^www\./, "");
       if (extractedHost === "trends24.in") hints.push("[THIRD-PARTY DATA] trends24.in is an independent aggregator, not an official X/Twitter source.");
     } catch { /* ignore */ }
     if (stillJsHeavy) hints.push("Page is JavaScript-rendered. Content may be incomplete. Try render='js' or render='browser'.");
+    // P2-3: Cross-tool intelligence — suggest better tools when extraction quality is poor
+    if (!contentOk && baseDomain) {
+      const SCRAPER_PLATFORMS: Record<string, string> = {
+        "amazon.com": "amazon_product_keywords", "reddit.com": "reddit_subreddit_posts",
+        "github.com": "github_repository_repo-url", "tiktok.com": "tiktok_posts_url",
+        "linkedin.com": "linkedin_company_information_url", "youtube.com": "youtube_video_search_label",
+        "instagram.com": "instagram_profile_url", "twitter.com": "twitter_profile_username",
+        "x.com": "twitter_profile_username", "glassdoor.com": "glassdoor_company_reviews_url",
+      };
+      const scraperOp = SCRAPER_PLATFORMS[baseDomain];
+      if (scraperOp) {
+        hints.push(`For structured ${baseDomain} data, try: novada_scrape(platform="${baseDomain}", operation="${scraperOp}")`);
+      }
+      if (usedMode === "render-failed" || (stillJsHeavy && !contentOk)) {
+        hints.push(`Page is bot-protected. Try: novada_unblock(url="${params.url}") for raw HTML with anti-bot bypass.`);
+      }
+    }
     if (isTruncated) hints.push(`Content truncated at ${maxChars} chars (full: ${totalChars}). Pass max_chars=${Math.min(maxChars * 2, 100000)} to get more.`);
     try { hints.push(`Discover more pages: novada_map(url="${new URL(params.url).origin}")`); } catch { /* ignore */ }
     return JSON.stringify(jsonResult, null, 2);
@@ -479,6 +537,9 @@ async function extractSingle(
   if (redditUrl) {
     lines.push(`- Reddit URL rewritten to old.reddit.com (static HTML) — new reddit.com blocks all scrapers.`);
   }
+  if (waybackFallback) {
+    lines.push(`- [WAYBACK] Content retrieved from Wayback Machine (archive.org) — the live page returned empty/blocked content. Data may be outdated.`);
+  }
   // Warn when content is sourced from a known third-party aggregator
   try {
     const extractedHost = new URL(params.url).hostname.replace(/^www\./, "");
@@ -519,6 +580,23 @@ async function extractSingle(
       if (!isBrowserConfigured()) {
         lines.push(`- For full browser rendering (costs ~$3/GB), set NOVADA_BROWSER_WS env var.`);
       }
+    }
+  }
+  // P2-3: Cross-tool intelligence — suggest better tools when extraction quality is poor
+  if (!contentOk && baseDomain) {
+    const SCRAPER_PLATFORMS: Record<string, string> = {
+      "amazon.com": "amazon_product_keywords", "reddit.com": "reddit_subreddit_posts",
+      "github.com": "github_repository_repo-url", "tiktok.com": "tiktok_posts_url",
+      "linkedin.com": "linkedin_company_information_url", "youtube.com": "youtube_video_search_label",
+      "instagram.com": "instagram_profile_url", "twitter.com": "twitter_profile_username",
+      "x.com": "twitter_profile_username", "glassdoor.com": "glassdoor_company_reviews_url",
+    };
+    const scraperOp = SCRAPER_PLATFORMS[baseDomain];
+    if (scraperOp) {
+      lines.push(`- For structured ${baseDomain} data, try: novada_scrape(platform="${baseDomain}", operation="${scraperOp}")`);
+    }
+    if (usedMode === "render-failed" || (stillJsHeavy && !contentOk)) {
+      lines.push(`- Page is bot-protected. Try: novada_unblock(url="${params.url}") for raw HTML with anti-bot bypass.`);
     }
   }
   if (isTruncated) {

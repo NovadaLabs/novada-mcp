@@ -53,7 +53,8 @@ export const SearchParamsSchema = z.object({
   exclude_domains: z.array(z.string()).optional()
     .describe("Exclude results from these domains. E.g. ['reddit.com', 'quora.com']. Max 10."),
   extract_options: z.object({
-    format: z.enum(["text", "markdown", "html"]).optional().default("markdown"),
+    format: z.enum(["text", "markdown", "html", "json"]).optional().default("markdown")
+      .describe("Output format. 'markdown' (default): structured readable output. 'json': structured JSON object with typed fields — best for programmatic agent consumption."),
     fields: z.array(z.string()).optional(),
     max_chars: z.number().int().min(1000).max(100000).optional(),
     top_n: z.number().int().min(1).max(10).optional().default(3)
