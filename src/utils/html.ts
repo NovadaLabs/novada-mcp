@@ -465,10 +465,10 @@ export function scoreExtraction(
   let score = 0;
   const signals: string[] = [];
 
-  // Structured data
+  // Structured data (reduced from +30 to +20 — pages without JSON-LD shouldn't be capped at 55)
   if (hasStructuredData) {
-    score += 30;
-    signals.push("structured_data:+30");
+    score += 20;
+    signals.push("structured_data:+20");
   }
 
   // Content length
@@ -484,6 +484,20 @@ export function scoreExtraction(
     signals.push("content_medium:+10");
   }
 
+  // List items: reward pages with many structured list entries (listings, feeds, search results)
+  const listItemCount = (markdown.match(/^- /gm) ?? []).length;
+  if (listItemCount >= 10) {
+    score += 10;
+    signals.push("has_list_items:+10");
+  }
+
+  // Content lines: reward well-structured content with many lines
+  const lineCount = markdown.split("\n").filter(l => l.trim().length > 0).length;
+  if (lineCount >= 20) {
+    score += 5;
+    signals.push("content_lines:+5");
+  }
+
   // Link density: count [text](url) patterns in markdown
   const linkMatches = markdown.match(/\[[^\]]+\]\([^)]+\)/g);
   const linkCount = linkMatches ? linkMatches.length : 0;
@@ -491,7 +505,8 @@ export function scoreExtraction(
   const wordCount = markdown.split(/\s+/).filter(Boolean).length;
   if (wordCount > 0) {
     const density = linkCount / wordCount;
-    if (density >= 0.05 && density <= 0.4) {
+    // Upper bound raised from 0.4 to 0.6 — listing pages (Reddit, HN) have link-heavy content
+    if (density >= 0.05 && density <= 0.6) {
       score += 10;
       signals.push("link_density_ok:+10");
     }
