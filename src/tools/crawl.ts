@@ -123,12 +123,18 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
       const jsHeavyFound = pages.some(p => p !== null && detectJsHeavyContent(p.html));
       if (jsHeavyFound) {
         renderDetected = true;
-        // Re-fetch the JS-heavy pages with render
-        for (let i = 0; i < pages.length; i++) {
-          if (pages[i] !== null && detectJsHeavyContent(pages[i]!.html)) {
-            pages[i] = await fetchPage(batch[i].url, apiKey, true);
-            pageRendered[i] = true;
-          }
+        // Re-fetch JS-heavy pages in parallel
+        const jsHeavyIndexes = pages
+          .map((p, i) => (p !== null && detectJsHeavyContent(p.html)) ? i : -1)
+          .filter(i => i >= 0);
+        if (jsHeavyIndexes.length > 0) {
+          const refetched = await Promise.all(
+            jsHeavyIndexes.map(i => fetchPage(batch[i].url, apiKey, true))
+          );
+          jsHeavyIndexes.forEach((origIdx, j) => {
+            pages[origIdx] = refetched[j];
+            pageRendered[origIdx] = true;
+          });
         }
       }
     }
@@ -245,6 +251,14 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
   if (params.instructions) {
     lines.push(`- Instructions were noted. Apply semantic filtering to the content above based on: "${params.instructions}"`);
   }
+
+  lines.push(``);
+  lines.push(`## Chainable Output`);
+  lines.push(`root_url: ${params.url}`);
+  const crawledUrls = results.slice(0, 10).map(r => `  ${r.url}`).join("\n");
+  lines.push(`crawled_pages:\n${crawledUrls}`);
+  lines.push(`agent_instruction: Crawl complete. ${results.length} pages extracted. To read a specific page use novada_extract. To discover more pages use novada_map with root_url.`);
+
   lines.push(``);
   lines.push(`---`);
   lines.push(``);
