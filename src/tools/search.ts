@@ -365,9 +365,10 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   const reranked = rerankResults(results, params.query);
 
   // P1-7: Auto-extract content from top N results when extract_options is provided
-  if (params.extract_options) {
-    const opts = params.extract_options;
-    const topN = opts.top_n ?? 3;
+  // P2-1: enrich_top shorthand — equivalent to extract_options: { top_n: 1 }
+  if (params.extract_options || params.enrich_top) {
+    const opts = params.extract_options ?? { top_n: 1, format: "markdown" as const };
+    const topN = opts.top_n ?? (params.enrich_top ? 1 : 3);
     const urlsToExtract = reranked.slice(0, topN)
       .map(r => r.url || r.link)
       .filter((u): u is string => Boolean(u));
@@ -458,6 +459,13 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   lines.push(`- To read any result in full: \`novada_extract\` with its url`);
   lines.push(`- To batch-read multiple results: \`novada_extract\` with \`url=[url1, url2, ...]\``);
   lines.push(`- For deeper multi-source research: \`novada_research\``);
+
+  lines.push(``);
+  lines.push(`## Chainable Output`);
+  lines.push(`result_count: ${reranked.length}`);
+  const topUrls = reranked.slice(0, 5).map((r, i) => `  [${i + 1}] ${r.url || r.link}`).join("\n");
+  lines.push(`top_urls:\n${topUrls}`);
+  lines.push(`agent_instruction: Search complete. Call novada_extract with any url above to read the full page. Call novada_research for deeper multi-source investigation.`);
 
   return lines.join("\n");
 }

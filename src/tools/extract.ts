@@ -1,4 +1,4 @@
-import { fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf } from "../utils/index.js";
+import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT } from "../utils/index.js";
 import type { FieldResult } from "../utils/index.js";
 import { matchHeadingSectionWithReason } from "../utils/fields.js";
 import type { ExtractParams } from "./types.js";
@@ -157,8 +157,22 @@ async function extractSingle(
     }
     usedMode = "render";
   } else {
-    // Auto or static: start with static fetch
-    const response = await fetchViaProxy(params.url, apiKey);
+    // Auto or static:
+    // P1-2: Race a direct HTTP fetch (no proxy) against the proxy for "auto" mode.
+    // Open static sites (HN, TechCrunch, Wikipedia) respond in ~300ms direct vs ~3s via proxy.
+    // Direct "wins" only if it returns clean HTML (no bot challenge, no JS-heavy indicators).
+    // Bot-protected or JS-heavy: direct rejects, proxy result is used — no change in behavior.
+    const response = await (effectiveMode === "auto"
+      ? Promise.any([
+          fetchWithRetry(params.url, { headers: { "User-Agent": USER_AGENT }, timeout: 3000 })
+            .then(r => {
+              const body = typeof r.data === "string" ? r.data : null;
+              if (body && !detectBotChallenge(body) && !detectJsHeavyContent(body)) return r;
+              throw new Error("not-static");
+            }),
+          fetchViaProxy(params.url, apiKey),
+        ])
+      : fetchViaProxy(params.url, apiKey));
     const contentType = String((response.headers as Record<string, string>)?.["content-type"] ?? "");
     if (isPdfResponse(params.url, contentType)) {
       const pdfBuffer = Buffer.isBuffer(response.data)

@@ -52,6 +52,8 @@ export const SearchParamsSchema = z.object({
     .describe("Only return results from these domains. E.g. ['github.com', 'arxiv.org']. Max 10."),
   exclude_domains: z.array(z.string()).optional()
     .describe("Exclude results from these domains. E.g. ['reddit.com', 'quora.com']. Max 10."),
+  enrich_top: z.boolean().optional()
+    .describe("Auto-extract full content from the top result. Shorthand for extract_options.top_n=1. Adds ~2-4s latency. Default: false."),
   extract_options: z.object({
     format: z.enum(["text", "markdown", "html", "json"]).optional().default("markdown")
       .describe("Output format. 'markdown' (default): structured readable output. 'json': structured JSON object with typed fields — best for programmatic agent consumption."),
