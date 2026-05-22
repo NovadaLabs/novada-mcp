@@ -396,3 +396,19 @@ export function validateBrowserParams(args: Record<string, unknown> | undefined)
   return BrowserParamsSchema.parse(args ?? {});
 }
 
+// ─── AI Monitor ──────────────────────────────────────────────────────────────
+
+export const AiMonitorParamsSchema = z.object({
+  brand: z.string().min(1).describe("Brand or product name to monitor across AI models. E.g. 'novada', 'firecrawl', 'stripe'."),
+  models: z.array(z.string()).optional()
+    .describe("AI models to check. Options: 'chatgpt', 'perplexity', 'grok', 'claude', 'gemini'. Default: ['chatgpt', 'perplexity', 'grok']."),
+  topics: z.array(z.string()).optional()
+    .describe("Topic filters to narrow the search. E.g. ['pricing', 'comparison', 'recommendation']. Default: general brand mentions."),
+});
+
+export type AiMonitorParams = z.infer<typeof AiMonitorParamsSchema>;
+
+export function validateAiMonitorParams(args: Record<string, unknown> | undefined): AiMonitorParams {
+  return AiMonitorParamsSchema.parse(args ?? {});
+}
+
