@@ -28,6 +28,7 @@ import {
   novadaScraperStatus,
   novadaScraperResult,
   novadaBrowserFlow,
+  novadaAiMonitor,
   validateSearchParams,
   validateExtractParams,
   validateCrawlParams,
@@ -60,6 +61,8 @@ import {
   UnblockParamsSchema,
   BrowserParamsSchema,
   HealthParamsSchema,
+  AiMonitorParamsSchema,
+  validateAiMonitorParams,
 } from "./tools/types.js";
 import { HealthAllParamsSchema } from "./tools/health_all.js";
 import { DiscoverParamsSchema } from "./tools/discover.js";
@@ -420,6 +423,17 @@ Not for:
     inputSchema: zodToMcpSchema(BrowserFlowParamsSchema),
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true },
   },
+  {
+    name: "novada_ai_monitor",
+    description: `Use when you need to check how AI models (ChatGPT, Perplexity, Grok, Claude, Gemini) reference a brand or product. Searches each AI platform's indexed content for brand mentions, analyzes sentiment, extracts claims, and identifies competitor mentions.
+
+**Best for:** Brand monitoring across AI search engines, competitive positioning analysis, detecting how AI recommends or compares your product.
+**Not for:** General web search (use novada_search), real-time social monitoring (use novada_scrape with twitter/reddit).
+**Output:** Per-model sentiment (positive/neutral/negative), key claims, competitor mentions, source URLs.
+**Models supported:** chatgpt, perplexity, grok, claude, gemini. Default checks: chatgpt, perplexity, grok.`,
+    inputSchema: zodToMcpSchema(AiMonitorParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
+  },
 ];
 
 // ─── Tool & Group Filtering ──────────────────────────────────────────────────
@@ -429,7 +443,7 @@ Not for:
 
 /** Category bundles — each group name expands to multiple tools */
 const CATEGORY_MAP: Record<string, string[]> = {
-  search:  ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_research", "novada_verify"],
+  search:  ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_research", "novada_verify", "novada_ai_monitor"],
   proxy:   ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],
   browser: ["novada_browser", "novada_browser_flow"],
   scraper: ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"],
@@ -632,6 +646,9 @@ class NovadaMCPServer {
             break;
           case "novada_proxy_dedicated":
             result = await novadaProxyDedicated(validateProxyDedicatedParams(args as Record<string, unknown>));
+            break;
+          case "novada_ai_monitor":
+            result = await novadaAiMonitor(validateAiMonitorParams(args as Record<string, unknown>), API_KEY);
             break;
           default:
             return {
