@@ -1,441 +1,250 @@
-<p align="center">
-  <h1 align="center">Novada MCP</h1>
-  <p align="center"><strong>在任意 AI 智能体或终端中搜索、提取、爬取、映射和研究网络内容。</strong></p>
-  <p align="center">由 <a href="https://www.novada.com">novada.com</a> 提供支持 — 覆盖 195 个国家的 1 亿+ 代理 IP。</p>
-</p>
+# novada
 
-<p align="center">
-  <a href="https://www.novada.com"><img src="https://img.shields.io/badge/novada.com-获取密钥-ff6b35?style=for-the-badge" alt="novada.com"></a>
-  <a href="https://www.npmjs.com/package/novada"><img src="https://img.shields.io/npm/v/novada?style=for-the-badge&label=MCP&color=blue" alt="npm 版本"></a>
-  <a href="https://smithery.ai/server/novada"><img src="https://img.shields.io/badge/Smithery-一键安装-8B5CF6?style=for-the-badge" alt="Smithery"></a>
-  <a href="#工具"><img src="https://img.shields.io/badge/工具数-11-brightgreen?style=for-the-badge" alt="11 个工具"></a>
-  <a href="#nova--命令行工具"><img src="https://img.shields.io/badge/CLI-novada-blueviolet?style=for-the-badge" alt="CLI nova"></a>
-  <a href="https://www.novada.com"><img src="https://img.shields.io/badge/代理IP-1亿+-red?style=for-the-badge" alt="1亿+ 代理 IP"></a>
-  <a href="https://www.novada.com"><img src="https://img.shields.io/badge/国家覆盖-195-cyan?style=for-the-badge" alt="195 个国家"></a>
-  <img src="https://img.shields.io/badge/测试用例-460-green?style=for-the-badge" alt="460 个测试">
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/许可证-MIT-yellow?style=for-the-badge" alt="MIT 许可证"></a>
-</p>
+> 一个 MCP 服务器，搞定所有网络数据。搜索、抓取、爬取、代理、AI 研究 — 一条 `npx` 命令搞定。
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/novada"><img src="https://img.shields.io/npm/dt/novada" alt="下载量"></a>
-  <a href="https://github.com/NovadaLabs/novada-mcp"><img src="https://img.shields.io/github/stars/NovadaLabs/novada-mcp?style=social" alt="收藏量"></a>
-</p>
+[![npm version](https://img.shields.io/npm/v/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-<p align="center">
-  <strong>语言：</strong>
-  <a href="README.md">English</a> &nbsp;·&nbsp; 中文
-</p>
+## 问题所在
 
----
+AI 智能体需要网络数据，但现有工具太碎片化：
 
-**快速跳转：** [懒人启动](#懒人启动--auto-setup) · [快速开始](#快速开始) · [工具](#工具) · [真实示例](#真实输出示例) · [用例](#用例) · [为什么选择 Novada](#为什么选择-novada)
+- **Tavily** 能搜索，但不能抓取或代理
+- **Firecrawl** 能抓取，但不能搜索或代理
+- **BrightData** 什么都能做，但 69 个工具会把你的上下文窗口撑爆
+- **自己搭建** 意味着要维护代理、反爬虫绕过、重试逻辑和十几个不同的 API
 
----
-
-## 懒人启动 — Auto-Setup
-
-让 AI 助手帮你完成全部配置：自动打开你的 Chrome、读取 Novada 控制台、提取凭证、写入 MCP 配置。
-
-**前提条件：** Claude Code + Chrome DevTools MCP + Chrome 已登录
-[dashboard.novada.com](https://dashboard.novada.com)
-
-完整提示词（中英双语）见
-[`prompts/lazy-start/setup-agent.md`](prompts/lazy-start/setup-agent.md)。
-
----
-
-## `novada` — 命令行工具
+## 解决方案
 
 ```bash
-npm install -g novada-mcp
-export NOVADA_API_KEY=你的密钥    # 在 novada.com 免费获取
+npx novada-mcp
 ```
 
-```bash
-novada search "东京最好的餐厅" --country jp
-novada search "AI 融资新闻" --time week --include "techcrunch.com,wired.com"
-novada extract https://example.com
-novada crawl https://docs.example.com --max-pages 10 --select "/api/.*"
-novada map https://docs.example.com --search "webhook" --max-depth 3
-novada research "AI 代理如何使用网络抓取？" --depth deep --focus "生产环境用例"
-```
+一个服务器。一个 API key。覆盖 AI 智能体所有网络数据需求的工具集：
 
----
+| 需求 | 工具 | 功能 |
+|------|------|------|
+| 查找信息 | `novada_search` | 支持 Google、Bing、DuckDuckGo、Yandex、Yahoo 的网络搜索 |
+| 读取页面 | `novada_extract` | 任意 URL → 干净的 Markdown，支持最多 10 个并行批量处理 |
+| 深度研究 | `novada_research` | 一次调用 → 并行搜索 → 去重 → 带引用的多源研究报告 |
+| 爬取站点 | `novada_crawl` | BFS/DFS 爬取，最多 20 页，支持正则路径过滤 |
+| 发现 URL | `novada_map` | Sitemap + BFS 发现，不读取内容 |
+| 平台数据 | `novada_scrape` | Amazon、LinkedIn、TikTok、GitHub、Zillow — 129 个平台 |
+| 监控变化 | `novada_monitor` | 在多次检查之间追踪价格/内容/可用性变化 |
+| 核实声明 | `novada_verify` | 对照实时网络来源并行核实事实 |
+| 原始 HTML | `novada_unblock` | JS 渲染或完整浏览器 CDP，用于有反爬保护的页面 |
+| 浏览器自动化 | `novada_browser` | 在云端浏览器中导航、点击、输入、填写表单、截图 |
+| 浏览器流程 | `novada_browser_flow` | 多步骤浏览器自动化序列 |
+| 代理凭证 | `novada_proxy` | 住宅、手机、ISP、数据中心、静态、专属 — 195 个国家 |
+| AI 品牌监控 | `novada_ai_monitor` | 查看 ChatGPT、Perplexity、Grok、Claude、Gemini 如何提及你的品牌 |
+| 健康检查 | `novada_health` | 检查你的 key 上哪些 API 产品已激活 |
+| 异步抓取 | `novada_scraper_submit` | 提交异步抓取任务 → 轮询 → 获取结果 |
+
+## 核心亮点
+
+**`novada_research` 独一无二。** 没有其他 MCP 服务器能把一个问题变成带引用的多源研究报告。它并行在 Google、Bing 和 DuckDuckGo 上搜索，去重，从前 5 个来源提取完整内容，并综合带引用的结果。一次工具调用取代整个研究工作流。深度选项：quick（3 个查询）、deep（5-6 个）、comprehensive（8-10 个）。
+
+**自动升级处理反爬虫。** 静态获取 → JS 渲染 → 浏览器 CDP。已知高难目标（Amazon、LinkedIn、G2、Zillow、Glassdoor、Walmart、Instagram、TikTok、Shein）根据 30+ 域名注册表直接跳到正确的方法。你不需要考虑 Cloudflare、DataDome、Kasada 或 PerimeterX — 工具会自动处理。
+
+**智能体优先设计（基准分 8.5/10）。** 每个响应都包含结构化的下一步指导 `agent_instruction`、`source` 字段（live/cache/wayback）、带 `failure_class` 的结构化错误、建议更优替代方案的跨工具提示，以及带机器可解析状态码的 `## Agent Action` 块。
 
 ## 快速开始
 
-### Claude Code（一条命令）
+1. 在 [novada.com](https://www.novada.com) 获取 API key
 
+2. 添加到你的 MCP 客户端：
+
+**Claude Code：**
 ```bash
-claude mcp add novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada-mcp
+claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
 ```
 
-所有项目生效（`--scope user`）：
-```bash
-claude mcp add --scope user novada -e NOVADA_API_KEY=你的密钥 -- npx -y novada-mcp
-```
-
-### Smithery（一键安装）
-
-通过 [Smithery](https://smithery.ai/server/novada) 安装，支持 Claude Desktop、Cursor、VS Code、Windsurf 等客户端。
-
-```bash
-npx -y @smithery/cli install novada --client claude
-```
-
-<details>
-<summary><strong>Cursor / VS Code / Windsurf / Claude Desktop — 手动配置</strong></summary>
-
-**Cursor** — `.cursor/mcp.json`：
+**Claude Desktop / Cursor / VS Code / Windsurf：**
 ```json
 {
   "mcpServers": {
     "novada": {
       "command": "npx",
       "args": ["-y", "novada-mcp"],
-      "env": { "NOVADA_API_KEY": "你的密钥" }
+      "env": { "NOVADA_API_KEY": "your_key" }
     }
   }
 }
 ```
 
-**VS Code** — `.vscode/mcp.json`：
-```json
-{
-  "servers": {
-    "novada": {
-      "command": "npx",
-      "args": ["-y", "novada-mcp"],
-      "env": { "NOVADA_API_KEY": "你的密钥" }
-    }
-  }
-}
+3. 试一试：
+```
+novada_search({query: "Claude MCP 教程", num: 5})
+novada_research({question: "MCP 服务器是如何工作的？", depth: "deep"})
+novada_extract({url: "https://news.ycombinator.com", format: "markdown"})
+novada_monitor({url: "https://amazon.com/dp/B09...", fields: ["price", "availability"]})
 ```
 
-**Windsurf** — `~/.codeium/windsurf/mcp_config.json`：
-```json
-{
-  "mcpServers": {
-    "novada": {
-      "command": "npx",
-      "args": ["-y", "novada-mcp"],
-      "env": { "NOVADA_API_KEY": "你的密钥" }
-    }
-  }
-}
+## 工具参考
+
+### 搜索与研究
+
+| 工具 | 用途 | 主要参数 | 示例 |
+|------|------|---------|------|
+| `novada_search` | 通过 5 个引擎进行网络搜索 | `query`, `engine`, `num`, `time_range`, `include_domains` | `novada_search({query: "最佳 API 网关 2026", engine: "google", num: 10})` |
+| `novada_research` | 多源并行研究 | `question`, `depth`, `focus` | `novada_research({question: "Kong vs Traefik vs APISIX", depth: "comprehensive", focus: "性能基准"})` |
+| `novada_verify` | 对照网络核实声明 | `claim` | `novada_verify({claim: "GPT-5 于 2026 年发布"})` |
+
+### 提取与爬取
+
+| 工具 | 用途 | 主要参数 | 示例 |
+|------|------|---------|------|
+| `novada_extract` | 从 URL 提取内容（支持批量） | `url`（单个或数组）, `format`, `render`, `fields` | `novada_extract({url: "https://example.com", fields: ["price", "rating"]})` |
+| `novada_crawl` | 从域名爬取多页 | `url`, `max_pages`, `strategy`, `select_paths` | `novada_crawl({url: "https://docs.example.com", max_pages: 10, select_paths: "/api/.*"})` |
+| `novada_map` | 发现站点上的 URL | `url`, `search`, `limit` | `novada_map({url: "https://example.com", search: "pricing"})` |
+| `novada_monitor` | 随时间检测页面变化 | `url`, `fields` | `novada_monitor({url: "https://amazon.com/dp/B09...", fields: ["price"]})` |
+
+### 结构化平台数据
+
+`novada_scrape` 支持 129 个平台的结构化数据提取，返回干净的表格记录，而非原始 HTML。
+
+| 平台 | 操作示例 | 返回数据 |
+|------|---------|---------|
+| Amazon | `amazon_product_keywords`, `amazon_product_asin` | 标题、价格、评分、评论、BSR、库存 |
+| LinkedIn | `linkedin_company_information_url`, `linkedin_profile_url` | 公司信息、员工数、个人资料 |
+| TikTok | `tiktok_posts_url`, `tiktok_profile_url` | 视频统计、互动、个人资料 |
+| GitHub | `github_repository_repo-url` | Star 数、Fork 数、Issues、描述、语言 |
+| Reddit | `reddit_subreddit_posts` | 帖子、分数、评论、时间戳 |
+| Zillow | `zillow_property_url` | 价格、卧室数、浴室数、面积、Zestimate |
+| Glassdoor | `glassdoor_company_reviews_url` | 评价、评分、薪资数据 |
+| YouTube | `youtube_video_search_label` | 视频标题、播放量、时长、频道 |
+| Instagram | `instagram_profile_url` | 帖子、粉丝、互动 |
+| Google Shopping | `google_shopping_search` | 商品、价格、商家 |
+
+完整平台列表：调用 `novada_discover` 或读取 `novada://scraper-platforms` MCP 资源。
+
+### 代理网络
+
+通过 Novada 的代理基础设施路由你自己的 HTTP 请求。1 亿+ IP，覆盖 195 个国家。
+
+| 工具 | 代理类型 | 最适合 |
+|------|---------|--------|
+| `novada_proxy_residential` | 真实家庭 ISP IP | 反爬虫绕过、地理限制内容 |
+| `novada_proxy_isp` | ISP 分配 IP | 社交媒体、电商平台 |
+| `novada_proxy_datacenter` | 数据中心 IP | 大批量、无保护目标 |
+| `novada_proxy_mobile` | 4G/5G 手机 IP | 移动端内容、App API |
+| `novada_proxy_static` | 专属静态 ISP IP | 账户管理、登录流程 |
+| `novada_proxy_dedicated` | 独享数据中心 IP | 高信任平台、干净声誉 |
+
+每个代理工具以 `url`、`env` 或 `curl` 格式返回连接凭证。参数：`country`（ISO 2 字母代码）、`city`（可选）、`session_id`（粘性会话）。
+
+### 浏览器自动化
+
+| 工具 | 用途 | 示例 |
+|------|------|------|
+| `novada_browser` | 通过 CDP 进行完整浏览器交互 | `novada_browser({actions: [{type: "navigate", url: "..."}, {type: "click", selector: "#btn"}]})` |
+| `novada_browser_flow` | 多步骤自动化序列 | 点击、滚动、等待、输入、截图 — 每次调用最多 20 个动作 |
+| `novada_unblock` | 从受保护页面获取原始渲染 HTML | `novada_unblock({url: "...", method: "browser"})` |
+
+通过 `session_id` 跨调用保持会话。Cookie、登录状态和页面上下文都会保留。
+
+## 使用场景
+
+### AI 智能体研究与 RAG 管道
 ```
-
-**Claude Desktop** — `~/Library/Application Support/Claude/claude_desktop_config.json`：
-```json
-{
-  "mcpServers": {
-    "novada": {
-      "command": "npx",
-      "args": ["-y", "novada-mcp"],
-      "env": { "NOVADA_API_KEY": "你的密钥" }
-    }
-  }
-}
+novada_research({question: "量子计算的最新进展是什么？", depth: "comprehensive"})
 ```
+返回带引用的多源报告。可直接输入 RAG 向量存储或用作智能体推理的上下文。
 
-</details>
-
-<details>
-<summary><strong>Python 调用示例</strong></summary>
-
-```python
-import subprocess, os
-
-result = subprocess.run(
-    ["novada", "search", "AI 代理框架"],
-    capture_output=True, text=True,
-    env={**os.environ, "NOVADA_API_KEY": "你的密钥"}
-)
-print(result.stdout)
+### 电商价格监控
 ```
-
-</details>
-
----
-
-## 真实输出示例
-
-### `novada search "东京最好的餐厅" --country jp`
-
+novada_monitor({url: "https://amazon.com/dp/B0XXXXXX", fields: ["price", "availability"]})
 ```
-## Search Results
-results:5 | engine:google | country:jp
+第一次调用记录基准值。之后再次调用 — 返回字段级别的差异，带百分比变化（例如，price: $999 → $899，↓10%）。
 
----
-
-### 1. 东京最佳餐厅 2025 — 米其林指南
-url: https://guide.michelin.com/en/tokyo-region/restaurants
-snippet: 东京拥有全球最多的米其林星级餐厅，推荐寿司次郎、Narisawa、Den...
-
-### 2. 东京前十大餐厅 — TimeOut
-url: https://www.timeout.com/tokyo/restaurants/best-restaurants-in-tokyo
-snippet: 从顶级怀石料理到平价拉面，2025 年完整榜单...
-
----
-## Agent Hints
-- 完整阅读任一结果：使用 `novada_extract` 传入对应 url
-- 批量读取多个结果：`novada_extract` 传入 `url=[url1, url2, ...]`
-- 深度多源研究：使用 `novada_research`
+### 竞品情报
 ```
-
-### `novada research "AI 代理如何使用网络抓取？" --depth deep`
-
+novada_scrape({platform: "amazon.com", operation: "amazon_product_keywords", params: {keyword: "wireless earbuds"}, limit: 20})
 ```
-## Research Report
-question: "AI 代理如何使用网络抓取？"
-depth:deep (auto-selected) | searches:6 | results:28 | unique_sources:15
+获取结构化商品数据（价格、评分、评论、BSR），用于跨 129 个平台的竞品分析。
 
----
-
-## 使用的搜索查询
-1. AI 代理如何使用网络抓取？
-2. ai agents web scraping overview explained
-3. ai agents web scraping best practices real world
-4. ai agents web scraping challenges limitations
-...
-
-## 主要发现
-1. **AI 代理正在改变网络抓取的未来**
-   https://medium.com/@davidfagb/...
-   这些代理能够思考、理解，并适应网页结构的变化...
-
-## 来源列表
-1. [AI 代理与网络抓取](https://medium.com/...)
-
----
-## Agent Hints
-- 找到 15 个来源，用 `novada_extract` 提取最相关的内容
-- 更广覆盖：使用 depth='comprehensive'（8-10 次搜索）
+### 线索获取
 ```
-
-### Map → 批量提取工作流
-
-```bash
-# 第一步：发现文档站所有页面
-novada map https://docs.example.com --search "webhook" --max-depth 3
-
-# 第二步：一次调用批量提取目标页面
-novada extract https://docs.example.com/webhooks/events https://docs.example.com/webhooks/retry
+novada_scrape({platform: "linkedin.com", operation: "linkedin_company_information_url", params: {url: "https://linkedin.com/company/..."}, limit: 1})
 ```
+从 LinkedIn 公司页面提取公司信息、员工数和行业数据。
 
----
+### LLM 训练内容提取
+```
+novada_crawl({url: "https://docs.example.com", max_pages: 20, select_paths: "/docs/.*"})
+```
+爬取文档站点，提取干净的 Markdown，用于微调数据集或知识库。
 
-## 工具
+### AI 品牌监控
+```
+novada_ai_monitor({brand: "YourProduct", models: ["chatgpt", "perplexity", "claude"]})
+```
+查看 AI 模型如何引用你的品牌：情感倾向、声明、竞品提及、来源 URL。
 
-### `novada_search` — 网络搜索
+### 地理定向数据采集
+```
+novada_proxy_residential({country: "CN", city: "shanghai", format: "curl"})
+```
+获取 195 个国家任意位置的代理凭证。配合你自己的 HTTP 客户端访问特定地区的内容。
 
-通过 Google、Bing、DuckDuckGo、Yahoo 或 Yandex 搜索网络。自动降级：请求的引擎失败时自动切换到可用引擎并告知原因。
+## 客观对比
 
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `query` | string | 是 | — | 搜索关键词 |
-| `engine` | string | 否 | `"google"` | `google` `bing` `duckduckgo` `yahoo` `yandex` |
-| `num` | number | 否 | `10` | 结果数量（1–20） |
-| `country` | string | 否 | — | 国家代码（`us` `cn` `jp` `de`） |
-| `language` | string | 否 | — | 语言代码（`en` `zh` `ja`） |
-| `time_range` | string | 否 | — | 时间范围：`day` `week` `month` `year` |
-| `start_date` | string | 否 | — | 起始日期 `YYYY-MM-DD` |
-| `end_date` | string | 否 | — | 截止日期 `YYYY-MM-DD` |
-| `include_domains` | string[] | 否 | — | 只返回这些域名的结果（最多 10 个） |
-| `exclude_domains` | string[] | 否 | — | 排除这些域名的结果（最多 10 个） |
+|  | Novada | Firecrawl | Tavily | BrightData |
+|---|---|---|---|---|
+| 工具数量 | 25 | 14 | 2 | 69 |
+| 搜索引擎 | 5 | 0 | 1 | 3 |
+| 多源研究 | **有** | 无 | 无 | 无 |
+| 代理作为 MCP 工具 | **有** | 无 | 无 | 无 |
+| 自动反爬升级 | **有** | 无 | N/A | 无 |
+| 变化监控 | **有** | 无 | 无 | 无 |
+| 平台结构化抓取 | 129 个平台 | 无 | 无 | 437 个平台 |
+| 浏览器自动化 | **有**（CDP）| 无 | 无 | 有 |
+| MCP Prompts & Resources | **有**（5+4）| 无 | 无 | 无 |
+| 托管 MCP（免安装）| **暂无** | 无 | 无 | 有 |
+| 智能体优先评分 | 8.5/10 | 6.0 | 6.0 | N/A |
 
-### `novada_extract` — 内容提取
+> **目前暂缺：** 托管 HTTP 端点（目前需要终端安装），部分 Scraper API 平台需要单独激活。BrightData 有更多结构化爬虫（437 vs 129）。
 
-提取任意 URL 的主体内容，支持最多 10 个 URL 并行批量提取。内容质量检测自动警告内容过短、语言错误和 CAPTCHA 拦截页。
+## 反爬支持
 
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `url` | string \| string[] | 是 | — | 单个 URL 或 URL 数组（最多 10 个，并行处理） |
-| `urls` | string[] | 否 | — | URL 数组的别名（最多 10 个）。批量工作流推荐使用此参数传递多个 URL |
-| `format` | string | 否 | `"markdown"` | `markdown` `text` `html` |
-| `render` | string | 否 | `"auto"` | `auto`（JS 密集时自动升级）· `static`（快速，无 JS）· `render`（Web Unblocker）· `browser`（完整 CDP） |
-| `query` | string | 否 | — | 查询上下文，帮助 agent 聚焦相关内容 |
-| `fields` | string[] | 否 | — | 指定要提取的字段（如 `["price", "author", "rating"]`，最多 20 个） |
-| `max_chars` | number | 否 | — | 返回内容的最大字符数（默认 25000，最大 100000）。常见错误：不要默认设为 100000 |
+Novada 通过自动升级链自动处理以下反爬虫系统：
 
-### `novada_crawl` — 网站爬取
-
-以 BFS 或 DFS 策略并发爬取网站多个页面（最多 20 页），支持路径过滤和自然语言指令。
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `url` | string | 是 | — | 起始 URL |
-| `max_pages` | number | 否 | `5` | 最大爬取页数（1–20） |
-| `strategy` | string | 否 | `"bfs"` | `bfs`（广度优先）或 `dfs`（深度优先） |
-| `select_paths` | string[] | 否 | — | 正则表达式 — 只爬取匹配路径 |
-| `exclude_paths` | string[] | 否 | — | 正则表达式 — 跳过匹配路径 |
-| `instructions` | string | 否 | — | 自然语言指令，说明优先爬取哪些页面 |
-
-### `novada_map` — URL 发现
-
-快速发现网站所有 URL，不提取页面内容，速度远快于爬取，适合页面结构探索。
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `url` | string | 是 | — | 根 URL |
-| `search` | string | 否 | — | 按关键词过滤发现的 URL |
-| `limit` | number | 否 | `50` | 返回最多 URL 数（1–100） |
-| `max_depth` | number | 否 | `2` | BFS 深度上限（1–5） |
-| `include_subdomains` | boolean | 否 | `false` | 是否包含子域名 URL |
-
-### `novada_research` — 深度研究
-
-多步骤网络研究：使用主题锚定查询和相关性过滤。并行生成 3–10 个搜索查询，去重去噪，自动移除偏题来源，返回带引用的综合报告。
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `question` | string | 是 | — | 研究问题（最少 5 个字符） |
-| `depth` | string | 否 | `"auto"` | `auto` `quick` `deep` `comprehensive` |
-| `focus` | string | 否 | — | 聚焦方向（如 `"技术实现"` `"市场分析"` `"最新动态"`） |
-
-### `novada_proxy` — 代理凭据
-
-生成即用代理凭据（住宅、移动、ISP、数据中心）。
-
-> **需要：** `NOVADA_PROXY_USER`、`NOVADA_PROXY_PASS`、`NOVADA_PROXY_ENDPOINT` 环境变量。从 [dashboard.novada.com](https://dashboard.novada.com) → Residential Proxies → Endpoint Generator 获取。
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `type` | string | 否 | `"residential"` | `residential` `mobile` `isp` `datacenter` |
-| `country` | string | 否 | — | ISO 2 字母国家代码（`us` `gb` `de`） |
-| `city` | string | 否 | — | 城市级定向（需同时指定 `country`） |
-| `session_id` | string | 否 | — | 粘性会话 — 相同 ID 返回同一 IP |
-| `format` | string | 否 | `"url"` | `url` · `env`（export 命令）· `curl`（--proxy 参数） |
-
-### `novada_scrape` — 平台结构化数据
-
-从 129 平台（Amazon、Reddit、TikTok、LinkedIn、Google Shopping 等）抓取结构化数据，无需手动解析 HTML。
-
-> **注意：** 需要激活 Scraper API 产品。如果遇到错误 11006，请联系 [novada.com](https://www.novada.com/) 客服。
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `platform` | string | 是 | — | 平台域名（如 `amazon.com` `reddit.com` `tiktok.com`） |
-| `operation` | string | 是 | — | 操作 ID（如 `amazon_product_by-keywords`） |
-| `params` | object | 否 | `{}` | 操作特定参数（如 `{ keyword: "iphone 16", num: 5 }`） |
-| `limit` | number | 否 | `20` | 最大记录数（1-100） |
-| `format` | string | 否 | `"markdown"` | `markdown` · `json`（结构化记录）。注意：`csv`/`html`/`xlsx` 仅在 `novada` CLI 中可用，不支持 MCP 调用。 |
-
-### `novada_verify` — 事实核查
-
-针对实时网络来源验证一个事实性声明。并行运行 3 次搜索（支持、质疑、中立核查角度），返回结构化裁定。
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `claim` | string | 是 | — | 要验证的事实声明（最少 10 个字符） |
-| `context` | string | 否 | — | 可选上下文，缩小搜索范围（如 `"截至 2024 年"` `"在美国"`） |
-
-**裁定值：** `supported`（支持）· `unsupported`（不支持）· `contested`（存疑）· `insufficient_data`（数据不足）
-
-### `novada_unblock` — 强制解锁
-
-强制使用 Web Unblocker 或 Browser API CDP 渲染指定 URL。当 `novada_extract` 速度不够快时直接调用。
-
-> **需要：** `NOVADA_WEB_UNBLOCKER_KEY` 或 `NOVADA_BROWSER_WS`
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `url` | string | 是 | — | 要解锁的 URL |
-| `method` | string | 否 | `"render"` | `render`（Web Unblocker）· `browser`（完整 CDP） |
-
-### `novada_browser` — 浏览器自动化
-
-云端浏览器自动化（CDP / Playwright）。每次会话最多 20 个链式操作，适用于需要登录流程、表单填写或截图捕获的场景。
-
-> **需要：** `NOVADA_BROWSER_WS`
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `actions` | array | 是 | — | 有序浏览器操作列表（最多 20 个） |
-
-**支持操作：** `navigate`（导航）· `click`（点击）· `type`（输入）· `screenshot`（截图）· `aria_snapshot`（快照）· `evaluate`（执行 JS）· `wait`（等待）· `scroll`（滚动）· `hover`（悬停）· `press_key`（按键）· `select`（选择）
-
-### `novada_health` — 健康检查
-
-检查所有已配置凭据和工具的连通状态，返回各项功能的可用性报告。无需参数。
-
----
-
-## Prompts 预置工作流
-
-MCP Prompts 是预置工作流模板，在支持的客户端（Claude Desktop、LobeChat 等）中可直接选用，无需手动构造参数。
-
-| Prompt 名称 | 功能描述 | 参数 |
-|------------|---------|------|
-| `research_topic` | 对任意主题进行深度多源研究，可指定国家和聚焦方向 | `topic`（必填）, `country`, `focus` |
-| `extract_and_summarize` | 提取一个或多个 URL 的内容并生成结构化摘要 | `urls`（必填）, `focus` |
-| `site_audit` | 映射网站结构，再提取并汇总关键章节 | `url`（必填）, `sections` |
-| `scrape_platform_data` | 从指定平台（Amazon、Reddit、TikTok 等）抓取结构化数据 | `platform`（必填）, `data_type`（必填）, `query`（必填） |
-| `browser_stateful_workflow` | 在持久会话中执行多步骤浏览器自动化工作流 | `url`（必填）, `workflow`（必填）, `session_id` |
-
----
-
-## Resources 只读数据
-
-Agent 可以在选择工具之前通过 `novada://` URI 访问的参考数据。
-
-| URI | 内容 |
-|-----|------|
-| `novada://engines` | 5 个搜索引擎的特性说明和推荐使用场景 |
-| `novada://countries` | 195 个国家代码（地理定向搜索参考） |
-| `novada://guide` | 工具选择决策树和常用工作流模式 |
-| `novada://scraper-platforms` | 129 个平台数据的有效 operation ID 列表 |
-
----
-
-## 用例
-
-| 用例场景 | 使用工具 | 实现方式 |
+| 反爬系统 | 检测方式 | 升级方法 |
 |---------|---------|---------|
-| **RAG 数据管道** | `search` + `extract` | 搜索 → 批量提取全文 → 存入向量数据库 |
-| **AI 智能研究** | `research` | 一次调用 → 多源综合带引用报告 |
-| **实时知识补充** | `search` | 获取模型训练截止日期之后的事实 |
-| **竞品情报分析** | `crawl` | 爬取竞争对手网站 → 提取内容变化 |
-| **商业线索挖掘** | `search` | 结构化的公司/产品列表 |
-| **SEO 追踪监控** | `search` | 跨 5 个引擎、195 个国家追踪关键词排名 |
-| **网站全面审计** | `map` → `extract` | 发现所有页面，批量提取目标内容 |
-| **受信来源过滤** | `search` | `include_domains` 限定可信来源范围 |
-| **趋势热点追踪** | `search` | `time_range=week` 只获取最新结果 |
+| Cloudflare | `cf_chl_`、`__cf_bm`、挑战页面 | 通过 Web Unblocker 自动渲染 |
+| DataDome | `datadome` cookie/脚本 | 自动渲染 |
+| Kasada | 脚本路径检测 | 浏览器 CDP |
+| PerimeterX | `_px` cookie 变体 | 自动渲染 |
+| Akamai | `_abck`、`ak_bmsc` cookie | 自动渲染 |
+| Imperva/Incapsula | `incap_ses_`、`visid_incap_` | 自动渲染 |
 
----
+30+ 个域名已在硬目标注册表中预标记 — 这些域名完全跳过静态获取，直接使用正确的方法。
 
-## 为什么选择 Novada？
+## 配置
 
-| 功能特性 | Novada | Tavily | Firecrawl | Brave Search |
-|---------|--------|--------|-----------|-------------|
-| 搜索引擎数量 | **5 个** | 1 个 | 1 个 | 1 个 |
-| 搜索自动降级 | **支持** | 无 | 无 | 无 |
-| URL 内容提取 | 支持 | 支持 | 支持 | 不支持 |
-| 批量提取 | **支持（最多 10 个 URL）** | 不支持 | 支持 | 不支持 |
-| 内容质量检测 | **支持** | 无 | 无 | 无 |
-| 网站爬取 | BFS/DFS | 支持 | 支持（异步） | 不支持 |
-| URL 发现映射 | 支持 | 支持 | 支持 | 不支持 |
-| 多源深度研究 | **相关性过滤** | 支持 | 不支持 | 不支持 |
-| MCP Prompts | **5 个** | 无 | 无 | 无 |
-| MCP Resources | **4 个** | 无 | 无 | 无 |
-| 地理定向 | **195 个国家** | 国家参数 | 无 | 国家参数 |
-| 域名过滤 | **include/exclude 双向** | 无 | 无 | 无 |
-| 反机器人绕过 | **代理 + Web Unblocker** | 无 | 无头浏览器 | 无 |
-| 命令行工具 | **`novada` 命令** | 无 | 无 | 无 |
-| Agent 引导提示 | **动态、基于每次响应** | 无 | 无 | 无 |
+| 变量 | 是否必须 | 用途 |
+|------|---------|------|
+| `NOVADA_API_KEY` | **必须** | API key — 覆盖搜索、提取、爬取、抓取、研究、核实、监控 |
+| `NOVADA_BROWSER_WS` | 否 | `novada_browser` 和 `novada_browser_flow` 的浏览器 API WebSocket URL |
+| `NOVADA_PROXY_USER` | 否 | `novada_proxy_*` 工具的代理用户名 |
+| `NOVADA_PROXY_PASS` | 否 | 代理密码 |
+| `NOVADA_PROXY_ENDPOINT` | 否 | 代理 host:port 端点 |
+| `NOVADA_WEB_UNBLOCKER_KEY` | 否 | Web Unblocker 单独 key（与主 API key 不同时使用）|
+| `NOVADA_TOOLS` | 否 | 只加载指定工具：`"extract,search,research,monitor"` |
+| `NOVADA_GROUPS` | 否 | 按组加载工具：`"search,proxy,browser"` — 组别：search, proxy, browser, scraper, health |
 
----
+## 链接
 
-## 前置要求
+- 文档 + API key：[novada.com](https://www.novada.com)
+- npm：[npmjs.com/package/novada-mcp](https://www.npmjs.com/package/novada-mcp)
+- GitHub：[github.com/NovadaLabs/novada-mcp](https://github.com/NovadaLabs/novada-mcp)
+- Issues：[github.com/NovadaLabs/novada-mcp/issues](https://github.com/NovadaLabs/novada-mcp/issues)
+- 工具详情：从任意 MCP 客户端调用 `novada_discover` 或 `novada_health`
 
-- **API 密钥** — [在 novada.com 免费注册获取](https://www.novada.com/)
-- **Node.js** v18+
+## 语言
 
----
-
-## 关于 Novada
-
-[Novada](https://www.novada.com/) — 面向开发者和 AI 智能体的网络数据基础设施。1亿+ 代理 IP，覆盖 195 个国家，内置反机器人绕过能力。
+[English](README.md) · 中文
 
 ## 许可证
 
