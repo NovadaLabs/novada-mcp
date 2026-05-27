@@ -25,9 +25,9 @@ export function withCredentials<T>(creds: ToolCredentials, fn: () => T): T {
   return store.run(creds, fn);
 }
 
-/** Active web unblocker key: SDK-scoped > NOVADA_WEB_UNBLOCKER_KEY env var. */
+/** Active web unblocker key: SDK-scoped > NOVADA_WEB_UNBLOCKER_KEY > NOVADA_API_KEY (unified). */
 export function getWebUnblockerKey(): string | undefined {
-  return store.getStore()?.webUnblockerKey ?? process.env.NOVADA_WEB_UNBLOCKER_KEY;
+  return store.getStore()?.webUnblockerKey ?? process.env.NOVADA_WEB_UNBLOCKER_KEY ?? process.env.NOVADA_API_KEY;
 }
 
 /** Active browser WebSocket endpoint: SDK-scoped > NOVADA_BROWSER_WS env var. */

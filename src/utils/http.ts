@@ -176,46 +176,65 @@ export async function fetchWithRender(
   const { country, ...axiosOptions } = options;
 
   if (unblockerKey) {
-    try {
-      const resp = await axios.post(
-        `${WEB_UNBLOCKER_BASE}/request`,
-        { target_url: url, response_format: "html", js_render: true, country: country ?? "" },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${unblockerKey}`,
-          },
-          timeout: TIMEOUTS.RENDER,
-          maxContentLength: 10 * 1024 * 1024, // 10MB cap — prevents OOM on huge pages
-          maxBodyLength: 10 * 1024 * 1024,
-          ...axiosOptions,
-        }
-      );
-      // Response format: { code: 0, data: { code: 200, html: "...", msg, msg_detail } }
-      if (resp.data?.code === 0 && resp.data?.data?.html) {
-        return { ...resp, data: resp.data.data.html };
-      }
-      // Inner code check — outer code=0 but inner data.code indicates an error (200-always pattern)
-      if (resp.data?.data?.code && resp.data.data.code !== 200) {
-        throw new Error(`Web Unblocker error (${resp.data.data.code}): ${resp.data.data.msg ?? "unknown"}`);
-      }
-      if (resp.data?.code !== 0) {
-        throw new Error(`Web Unblocker error: ${resp.data?.msg ?? "unknown"}`);
-      }
-      return resp;
-    } catch (error) {
-      // Intercept 10MB cap violation for POST path and surface an actionable error
-      if (error instanceof AxiosError && error.message?.toLowerCase().includes("maxcontentlength")) {
-        throw new Error(
-          `Web Unblocker response from ${url} exceeds the 10MB content limit. ` +
-          "The rendered page may contain large embedded assets. Try a more specific subpage URL."
+    // Web Unblocker API is intermittently flaky — inner data.code returns 403/502
+    // on ~30% of requests even for simple targets. Retry up to 2 times on transient failures.
+    const MAX_RETRIES = 2;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const resp = await axios.post(
+          `${WEB_UNBLOCKER_BASE}/request`,
+          { target_url: url, response_format: "html", js_render: true, country: country ?? "" },
+          {
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${unblockerKey}`,
+            },
+            timeout: TIMEOUTS.RENDER,
+            maxContentLength: 10 * 1024 * 1024,
+            maxBodyLength: 10 * 1024 * 1024,
+            ...axiosOptions,
+          }
         );
+        // Response format: { code: 0, data: { code: 200, html: "...", msg, msg_detail } }
+        if (resp.data?.code === 0 && resp.data?.data?.html) {
+          return { ...resp, data: resp.data.data.html };
+        }
+        // Inner code check — outer code=0 but inner data.code indicates a transient error
+        if (resp.data?.data?.code && resp.data.data.code !== 200) {
+          const innerCode = resp.data.data.code;
+          // 403/429/500/502/503 are transient — retry
+          if ([403, 429, 500, 502, 503].includes(innerCode) && attempt < MAX_RETRIES) {
+            lastError = new Error(`Web Unblocker error (${innerCode}): ${resp.data.data.msg ?? "unknown"}`);
+            await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // backoff: 1s, 2s
+            continue;
+          }
+          throw new Error(`Web Unblocker error (${innerCode}): ${resp.data.data.msg ?? "unknown"}`);
+        }
+        if (resp.data?.code !== 0) {
+          throw new Error(`Web Unblocker error: ${resp.data?.msg ?? "unknown"}`);
+        }
+        return resp;
+      } catch (error) {
+        if (error instanceof AxiosError && error.message?.toLowerCase().includes("maxcontentlength")) {
+          throw new Error(
+            `Web Unblocker response from ${url} exceeds the 10MB content limit. ` +
+            "The rendered page may contain large embedded assets. Try a more specific subpage URL."
+          );
+        }
+        // Retry on HTTP-level transient errors (502, 503, timeout)
+        const status = (error as AxiosError)?.response?.status;
+        if (status && [502, 503, 429].includes(status) && attempt < MAX_RETRIES) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        throw error;
       }
-      // Always re-throw — callers handle escalation logic and mode tracking.
-      // Silently falling back to proxy would give callers a static result while
-      // they believe they have a JS-rendered page (wrong mode metadata).
-      throw error;
     }
+    // All retries exhausted
+    throw lastError ?? new Error("Web Unblocker failed after retries");
   }
 
   // Fallback: no unblocker key configured — use proxy/direct fetch (best effort)
