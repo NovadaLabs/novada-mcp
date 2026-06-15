@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Novada MCP — Update Log / 更新日志</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0a2540;
+    --navy-2: #1e3a5f;
+    --cyan: #06b6d4;
+    --cyan-bg: #ecfeff;
+    --orange: #ea580c;
+    --green: #16a34a;
+    --red: #dc2626;
+    --ink: #1f2937;
+    --paper: #ffffff;
+    --paper-2: #f8fafc;
+    --line: #e5e7eb;
+    --muted: #6b7280;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: "Noto Sans SC", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--paper-2);
+    color: var(--ink);
+    line-height: 1.75;
+    margin: 0;
+    padding: 40px 20px;
+  }
+
+  .container { max-width: 980px; margin: 0 auto; }
+
+  /* Language toggle: default shows ZH, hides EN */
+  .en { display: none; }
+  html.lang-en .zh { display: none; }
+  html.lang-en .en { display: inline; }
+  html.lang-en .en-block { display: block; }
+  .en-block { display: none; }
+
+  .header {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+    color: #fff;
+    border-radius: 20px;
+    padding: 44px 40px 38px;
+    margin-bottom: 32px;
+  }
+  .header::after {
+    content: "";
+    position: absolute;
+    top: -40%;
+    right: -10%;
+    width: 460px;
+    height: 460px;
+    background: radial-gradient(circle, rgba(6,182,212,0.35) 0%, rgba(6,182,212,0) 65%);
+    pointer-events: none;
+  }
+  .header h1 {
+    font-family: "Inter", sans-serif;
+    font-weight: 800;
+    font-size: 32px;
+    margin: 0 0 10px;
+    letter-spacing: -0.02em;
+    position: relative;
+  }
+  .header p { margin: 0; color: #cbd5e1; font-size: 15px; position: relative; max-width: 640px; }
+  .meta-row { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px; position: relative; }
+  .meta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.10);
+    border: 1px solid rgba(255,255,255,0.18);
+    color: #e0f2fe;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 13px;
+    border-radius: 999px;
+  }
+  .meta-pill b { color: #fff; font-weight: 700; }
+
+  .lang-switch {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 100;
+    display: flex;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 4px;
+    box-shadow: 0 4px 14px rgba(10,37,64,0.12);
+  }
+  .lang-switch button {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-family: "Inter", sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 6px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .lang-switch button.active {
+    background: var(--navy);
+    color: #fff;
+  }
+
+  section {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 28px 32px;
+    margin-bottom: 22px;
+    box-shadow: 0 1px 3px rgba(10,37,64,0.04);
+  }
+  section h2 {
+    font-family: "Inter", sans-serif;
+    color: var(--navy);
+    font-weight: 800;
+    font-size: 22px;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+  section .sub { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+
+  .task-badge {
+    display: inline-block;
+    font-family: "Inter", sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 6px;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  .badge-a { background: var(--cyan-bg); color: #0e7490; }
+  .badge-b { background: #fef3c7; color: #b45309; }
+  .badge-c { background: #f3e8ff; color: #7e22ce; }
+  .badge-x { background: #dcfce7; color: #15803d; }
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: "Inter", sans-serif;
+    font-weight: 600;
+    font-size: 12px;
+    padding: 3px 11px;
+    border-radius: 999px;
+  }
+  .status-done { background: #dcfce7; color: var(--green); }
+  .status-verified { background: var(--cyan-bg); color: #0e7490; }
+
+  h3 {
+    font-family: "Inter", sans-serif;
+    color: var(--navy-2);
+    font-weight: 700;
+    font-size: 16px;
+    margin: 22px 0 8px;
+  }
+
+  p { margin: 0 0 12px; }
+  ul { margin: 0 0 12px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+
+  code {
+    font-family: "JetBrains Mono", monospace;
+    background: var(--navy);
+    color: #e0f2fe;
+    font-size: 13px;
+    padding: 2px 7px;
+    border-radius: 5px;
+  }
+  pre {
+    font-family: "JetBrains Mono", monospace;
+    background: var(--navy);
+    color: #e0f2fe;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 18px 20px;
+    border-radius: 12px;
+    overflow-x: auto;
+    margin: 0 0 14px;
+  }
+  pre code { background: transparent; padding: 0; }
+
+  .callout {
+    border-left: 3px solid var(--cyan);
+    background: var(--cyan-bg);
+    border-radius: 0 10px 10px 0;
+    padding: 14px 18px;
+    margin: 0 0 14px;
+    font-size: 14px;
+  }
+  .callout.warn { border-left-color: var(--orange); background: #fff7ed; }
+  .callout.crit { border-left-color: var(--red); background: #fef2f2; }
+  .callout b { color: var(--navy); }
+
+  table { width: 100%; border-collapse: collapse; margin: 0 0 14px; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { font-family: "Inter", sans-serif; color: var(--navy); font-weight: 700; background: var(--paper-2); }
+  td code { font-size: 12px; }
+
+  .footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 30px;
+    padding: 18px;
+  }
+  .footer code { font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="lang-switch">
+  <button id="btn-zh" class="active" onclick="setLang('zh')">中文</button>
+  <button id="btn-en" onclick="setLang('en')">EN</button>
+</div>
+
+<div class="container">
+
+  <header class="header">
+    <h1>
+      <span class="zh">Novada MCP 更新日志</span>
+      <span class="en">Novada MCP Update Log</span>
+    </h1>
+    <p>
+      <span class="zh">本次会话的全部工作记录:Scraper 状态竞态修复、Google Shopping 操作 ID 校验、版本号对账,以及 <code>scrape.ts</code> 的自纠错改进。</span>
+      <span class="en">A complete record of this session's work: Scraper status race-condition fix, Google Shopping operation-ID verification, version reconciliation, and the self-correcting <code>scrape.ts</code> improvements.</span>
+    </p>
+    <div class="meta-row">
+      <span class="meta-pill"><span class="zh">版本</span><span class="en">Version</span> <b>v0.8.0</b></span>
+      <span class="meta-pill"><span class="zh">日期</span><span class="en">Date</span> <b>2026-06-15</b></span>
+      <span class="meta-pill">HEAD <b>e708010</b></span>
+      <span class="meta-pill">KR-1</span>
+    </div>
+  </header>
+
+  <!-- TASK A -->
+  <section>
+    <h2>
+      <span class="task-badge badge-a">A</span>
+      <span class="zh">修复 Scraper 状态竞态</span>
+      <span class="en">Fix Scraper Status Race Condition</span>
+      <span class="status status-done" style="float:right;">
+        <span class="zh">✓ 已提交并推送</span><span class="en">✓ Committed &amp; Pushed</span>
+      </span>
+    </h2>
+    <p class="sub"><code>src/tools/scraper_status.ts</code> · commit <code>e708010</code></p>
+
+    <h3><span class="zh">问题</span><span class="en">Problem</span></h3>
+    <p>
+      <span class="zh">在 <code>novada_scraper_submit</code> 成功返回 <code>task_id</code> 后立即调用 <code>novada_scraper_status</code>,服务器尚未完成 task 传播,返回 <code>not_found</code>。原响应未区分「真正无效的 task_id」与「刚提交、几秒内尚未生效」这一竞态,导致 agent 误判任务失败。</span>
+      <span class="en">Calling <code>novada_scraper_status</code> immediately after <code>novada_scraper_submit</code> returns a <code>task_id</code> hits a window where the server has not yet propagated the task, returning <code>not_found</code>. The old response did not distinguish a genuinely invalid <code>task_id</code> from the just-submitted propagation race — causing the agent to wrongly conclude the task had failed.</span>
+    </p>
+
+    <h3><span class="zh">修复</span><span class="en">Fix</span></h3>
+    <p>
+      <span class="zh"><code>not_found</code> 响应的 <code>agent_instruction</code> 现在明确告知:刚提交属正常现象,等待 5–10 秒后<strong>仅重试一次</strong>;若单次重试后仍 <code>not_found</code>,则 task_id 很可能无效或已过期(任务 24 小时后过期)。</span>
+      <span class="en">The <code>not_found</code> response's <code>agent_instruction</code> now states that a fresh submit is normal, advises waiting 5–10s and retrying <strong>exactly once</strong>; if it is still <code>not_found</code> after that single retry, the task_id is likely invalid or expired (tasks expire after 24h).</span>
+    </p>
+    <div class="callout">
+      <b><span class="zh">Agent-First 原则:</span><span class="en">Agent-First principle:</span></b>
+      <span class="zh">错误响应必须携带可执行的 <code>agent_instruction</code>,告诉 agent「下一步做什么」,而非仅报告失败。</span>
+      <span class="en">Error responses must carry an actionable <code>agent_instruction</code> telling the agent what to do next, not merely report failure.</span>
+    </div>
+  </section>
+
+  <!-- TASK B -->
+  <section>
+    <h2>
+      <span class="task-badge badge-b">B</span>
+      <span class="zh">校验 Google Shopping 操作 ID</span>
+      <span class="en">Verify Google Shopping Operation ID</span>
+      <span class="status status-verified" style="float:right;">
+        <span class="zh">✓ 浏览器已核实</span><span class="en">✓ Browser-Verified</span>
+      </span>
+    </h2>
+    <p class="sub"><span class="zh">结论</span><span class="en">Verdict</span>: <code>WRONG_ID</code></p>
+
+    <h3><span class="zh">背景</span><span class="en">Context</span></h3>
+    <p>
+      <span class="zh">另一 agent 的 QA 报告中,Google Shopping 调用返回 <code>code 11006</code>。需确认这是「操作 ID 写错」还是「Scraper API / 该操作未激活」。</span>
+      <span class="en">A QA report flagged a Google Shopping call returning <code>code 11006</code>. We needed to confirm whether this was a malformed operation ID or a deactivated Scraper API / operation.</span>
+    </p>
+
+    <h3><span class="zh">核实结果</span><span class="en">Findings</span></h3>
+    <ul>
+      <li><span class="zh">Scraper API 在该账户<strong>全局 Active</strong>。</span><span class="en">Scraper API is <strong>Active account-wide</strong>.</span></li>
+      <li><span class="zh">Google Shopping 是<strong>已上线的 scraper</strong>,并非未激活。</span><span class="en">Google Shopping is a <strong>live scraper</strong>, not deactivated.</span></li>
+      <li><span class="zh"><code>code 11006</code> 反映的是<strong>非法 / 非规范操作 ID</strong>,而非账户问题。</span><span class="en"><code>code 11006</code> reflects a <strong>malformed / non-canonical operation ID</strong>, not an account issue.</span></li>
+    </ul>
+
+    <div class="callout">
+      <b><span class="zh">规范用法:</span><span class="en">Canonical usage:</span></b>
+      <table>
+        <tr><th><span class="zh">字段</span><span class="en">Field</span></th><th><span class="zh">值</span><span class="en">Value</span></th></tr>
+        <tr><td>platform</td><td><code>google.com</code></td></tr>
+        <tr><td>operation</td><td><code>google_shopping_keywords</code></td></tr>
+        <tr><td>params</td><td><code>{ keyword }</code></td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- TASK C -->
+  <section>
+    <h2>
+      <span class="task-badge badge-c">C</span>
+      <span class="zh">版本号对账</span>
+      <span class="en">Reconcile Version References</span>
+      <span class="status status-done" style="float:right;">
+        <span class="zh">✓ 已更新</span><span class="en">✓ Updated</span>
+      </span>
+    </h2>
+    <p class="sub">Supabase <code>fjdtuyflvgylrllujpnc</code> · <span class="zh">表</span><span class="en">table</span> <code>projects</code></p>
+    <p>
+      <span class="zh">Supabase 中 <code>projects.current_version</code> 仍停留在旧值 <code>0.7.9</code>,与 <code>package.json</code> 的权威版本 <code>0.8.0</code> 不一致。已更新一致。</span>
+      <span class="en">Supabase <code>projects.current_version</code> was stale at <code>0.7.9</code>, inconsistent with the authoritative <code>package.json</code> version <code>0.8.0</code>. Reconciled.</span>
+    </p>
+    <pre><code>UPDATE projects SET current_version = '0.8.0'
+WHERE slug = 'novada-mcp';</code></pre>
+    <div class="callout">
+      <b><span class="zh">一致性原则:</span><span class="en">Consistency principle:</span></b>
+      <span class="zh">每一处不一致都是下一个 agent 的陷阱。改一处,改全部。</span>
+      <span class="en">Every inconsistency is a trap for the next agent. Update one place, update all.</span>
+    </div>
+  </section>
+
+  <!-- SCRAPE.TS CHANGES -->
+  <section>
+    <h2>
+      <span class="task-badge badge-x">+</span>
+      <span class="zh"><code>scrape.ts</code> 自纠错改进</span>
+      <span class="en"><code>scrape.ts</code> Self-Correcting Improvements</span>
+      <span class="status status-done" style="float:right;">
+        <span class="zh">✓ 已构建验证</span><span class="en">✓ Build-Verified</span>
+      </span>
+    </h2>
+    <p class="sub"><code>src/tools/scrape.ts</code> · <span class="zh">3 处改动 · 已过 code-reviewer · 未推送</span><span class="en">3 edits · code-reviewer approved · not yet pushed</span></p>
+
+    <h3><span class="zh">改动 1 — 操作 ID 别名</span><span class="en">Edit 1 — Operation Alias</span></h3>
+    <p>
+      <span class="zh">为 <code>OPERATION_ALIASES</code> 增加 <code>google_shopping</code> → <code>google_shopping_keywords</code> 映射,让 agent 的常见近似写法被自动纠正,无需二次往返。</span>
+      <span class="en">Added <code>google_shopping</code> → <code>google_shopping_keywords</code> to <code>OPERATION_ALIASES</code> so a common near-miss is auto-corrected without a second round-trip.</span>
+    </p>
+    <pre><code>const OPERATION_ALIASES: Record&lt;string, string&gt; = {
+  "amazon_product_by-keywords": "amazon_product_keywords",
+  "amazon_product_by-asin":     "amazon_product_asin",
+  "google_shopping":            "google_shopping_keywords",
+  "google_shopping_by-keyword": "google_shopping_keywords",
+};</code></pre>
+
+    <h3><span class="zh">改动 2 — 自纠错的 11006 响应</span><span class="en">Edit 2 — Self-Correcting 11006 Response</span></h3>
+    <p>
+      <span class="zh"><code>code 11006</code> 不再笼统地归因为「Scraper API 未激活」。新响应明确指出 11006 几乎总是非规范操作 ID,并引导 agent 先读 <code>novada://scraper-platforms</code> 确认规范 ID,仅在确认 ID 正确后才视为激活问题。</span>
+      <span class="en">The <code>code 11006</code> response no longer blanket-blames "Scraper API not activated." It states 11006 is almost always a non-canonical op ID and steers the agent to read <code>novada://scraper-platforms</code> for the canonical ID first, only treating it as an activation issue if the ID is confirmed correct.</span>
+    </p>
+
+    <h3><span class="zh">改动 3 — code-reviewer 强制修复</span><span class="en">Edit 3 — code-reviewer Mandated Fix</span></h3>
+    <div class="callout crit">
+      <b>HIGH</b> —
+      <span class="zh">原别名分支提示 agent「用规范 ID 重试」。但规范 ID 在 try 块之前(<code>operation</code> 解析处)已被提交并被拒绝 —— 这会把一个<strong>永久错误</strong>变成<strong>无限重试循环</strong>。(命中 Worker Done-Definition 检查点 1:错误路径追踪。)</span>
+      <span class="en">The alias branch told the agent to "retry with the canonical ID." But the canonical ID was already submitted (resolved before the try block) and rejected — turning a <strong>permanent error</strong> into an <strong>infinite retry loop</strong>. (Caught by Worker Done-Definition checkpoint 1: error-path tracing.)</span>
+    </div>
+    <ul>
+      <li><b>HIGH</b> <span class="zh">— 别名分支改为说明规范 ID 已提交但仍被拒,不再建议重试。</span><span class="en">— alias branch now explains the canonical ID was submitted &amp; still rejected; no retry advice.</span></li>
+      <li><b>MEDIUM</b> <span class="zh">— 移除整张 <code>OPERATION_ALIASES</code> 泄漏,改为条件展开 <code>alias_resolved_to</code>。</span><span class="en">— removed full <code>OPERATION_ALIASES</code> map leak; conditionally spread <code>alias_resolved_to</code>.</span></li>
+      <li><b>LOW</b> <span class="zh">— <code>operation_resolved</code> 仅在与 <code>params.operation</code> 不同时才展开。</span><span class="en">— <code>operation_resolved</code> spread only when it differs from <code>params.operation</code>.</span></li>
+    </ul>
+
+    <div class="callout">
+      <b><span class="zh">验证:</span><span class="en">Verification:</span></b>
+      <code>npm run build</code>
+      <span class="zh">通过 · code-reviewer 结论 0 CRITICAL / 1 HIGH(已修)/ 1 MEDIUM(已修)/ 2 LOW(已修)。</span>
+      <span class="en">passed · code-reviewer: 0 CRITICAL / 1 HIGH (fixed) / 1 MEDIUM (fixed) / 2 LOW (fixed).</span>
+    </div>
+    <div class="callout warn">
+      <b><span class="zh">待推送:</span><span class="en">Pending push:</span></b>
+      <span class="zh">本节改动尚未推送。推送审批仅授予任务 A;推送前需重新征得许可。</span>
+      <span class="en">These changes are not yet pushed. Push approval was granted only for task A; re-ask before pushing.</span>
+    </div>
+  </section>
+
+  <div class="footer">
+    <span class="zh">由 Plywood Protocol + AAM 多 agent 模式自动化生成 · novada-mcp</span>
+    <span class="en">Generated via Plywood Protocol + AAM multi-agent pattern · novada-mcp</span>
+    <br>
+    <code>docs/update-log.html</code>
+  </div>
+
+</div>
+
+<script>
+  function setLang(lang) {
+    var html = document.documentElement;
+    if (lang === 'en') {
+      html.classList.add('lang-en');
+      html.setAttribute('lang', 'en');
+    } else {
+      html.classList.remove('lang-en');
+      html.setAttribute('lang', 'zh-CN');
+    }
+    document.getElementById('btn-zh').classList.toggle('active', lang === 'zh');
+    document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+  }
+</script>
+
+</body>
+</html>
