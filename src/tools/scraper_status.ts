@@ -1,7 +1,8 @@
 import axios, { AxiosError } from "axios";
 import { z } from "zod";
 import { makeNovadaError, NovadaErrorCode, sanitizeServerMsg } from "../_core/errors.js";
-import { SCRAPER_STATUS_BASE } from "../config.js";
+import { TASK_ID_REGEX, TASK_ID_REGEX_MSG } from "./types.js";
+import { SCRAPER_STATUS_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
 
 // ─── Schema & Types ──────────────────────────────────────────────────────────
 
@@ -9,10 +10,7 @@ export const ScraperStatusParamsSchema = z.object({
   task_id: z
     .string()
     .min(1, "task_id is required")
-    .regex(
-      /^[a-zA-Z0-9_\-\.]{1,128}$/,
-      "task_id must be alphanumeric with underscores/hyphens/dots only"
-    )
+    .regex(TASK_ID_REGEX, TASK_ID_REGEX_MSG)
     .describe(
       "The task_id returned by novada_scraper_submit. Used to poll scraping task progress."
     ),
@@ -74,7 +72,7 @@ export async function novadaScraperStatus(
   // Primary: use download endpoint directly (api-m.novada.com/v1/scraper returns 404)
   // GET /scraper_download?task_id=...&file_type=json&apikey=...
   try {
-    const dlResp = await axios.get(`https://api.novada.com/g/api/proxy/scraper_download`, {
+    const dlResp = await axios.get(`${SCRAPER_DOWNLOAD_BASE}/scraper_download`, {
       params: { task_id, file_type: "json", apikey: apiKey },
       timeout: 15000,
     });
@@ -110,6 +108,12 @@ export async function novadaScraperStatus(
         }, null, 2);
       }
     }
+
+    // M-3: Guard against empty/null body silently falling through to api-m.
+    // If the primary endpoint returned HTTP 200 with non-actionable data (empty string,
+    // null, empty array, or unrecognized shape), explicitly fall through to the api-m
+    // fallback rather than silently misclassifying.
+    // (No early return here — intentional fall-through to api-m status endpoint below.)
   } catch (primaryErr: unknown) {
     if (primaryErr instanceof AxiosError) {
       const s = primaryErr.response?.status;
@@ -173,8 +177,7 @@ export async function novadaScraperStatus(
       if (status === 404) {
         // Fallback: try the download endpoint (same backend scraper_result uses)
         try {
-          const DOWNLOAD_BASE = "https://api.novada.com/g/api/proxy";
-          const dlResp = await axios.get(`${DOWNLOAD_BASE}/scraper_download`, {
+          const dlResp = await axios.get(`${SCRAPER_DOWNLOAD_BASE}/scraper_download`, {
             params: { task_id, file_type: "json", apikey: apiKey },
             timeout: 15000,
           });
@@ -224,12 +227,16 @@ export async function novadaScraperStatus(
           }
           /* other fallback failures — fall through to not_found */
         }
+        // M-7: Instruction assumes agent has no cross-turn memory — "ONCE" is per-response.
+        // Explicit two-case phrasing prevents indefinite retry loops.
         return JSON.stringify(
           {
             status: "not_found",
             task_id,
             agent_instruction:
-              "Task not found yet. If you just called novada_scraper_submit, this is normal — the task_id takes a few seconds to propagate. Wait 5-10 seconds and retry novada_scraper_status ONCE with the same task_id. If it is still not_found after that single retry, the task_id is likely invalid (not from a successful submit) or expired (tasks expire after 24 hours).",
+              "Task not found. Two possibilities: " +
+              "(1) If you JUST called novada_scraper_submit (within the last 10 seconds), this is normal propagation delay — wait 5-10 seconds and call novada_scraper_status ONE more time. " +
+              "(2) If you already retried once and still see not_found, the task_id is invalid or expired (tasks expire after 24 hours). Do NOT retry further — re-submit with novada_scraper_submit or switch to novada_extract.",
           },
           null,
           2
@@ -251,31 +258,39 @@ export async function novadaScraperStatus(
           task_id,
           error: `HTTP ${status ?? "network"}: ${serverMsg}`,
           agent_instruction:
-            "Could not reach the scraper status endpoint. If this persists, contact Novada support at support@novada.com to confirm the GET /v1/scraper/{task_id} endpoint is available on your account. Do not retry more than 3 times.",
+            "Could not reach the scraper status endpoint. " +
+            "Try novada_health to diagnose connectivity. " +
+            "If the endpoint is reachable, retry once after 30 seconds. " +
+            "If it persists after 3 attempts, switch to novada_extract or novada_crawl as alternatives. " +
+            "Support: support@novada.com.",
         },
         null,
         2
       );
     }
 
+    // H-3: Sanitize error message to prevent API key leakage
     return JSON.stringify({
       status: "endpoint_error",
       task_id,
-      error: err instanceof Error ? err.message : String(err),
+      error: sanitizeServerMsg(err instanceof Error ? err.message : String(err)),
       agent_instruction:
-        "An unexpected error occurred while checking the scraper status. Do not retry automatically — report this to support@novada.com if it persists.",
+        "An unexpected error occurred while checking scraper status. " +
+        "Try novada_health to verify connectivity. Do not retry automatically. " +
+        "If it persists, switch to novada_extract or novada_crawl. Support: support@novada.com.",
     }, null, 2);
   }
 
   // Build response based on normalized status
   switch (normalStatus) {
     case "complete":
+      // H-2: Do NOT include rawResult — untrusted server data could carry prompt injection.
+      // Agent must call novada_scraper_result to get formatted, sanitized data.
       return JSON.stringify(
         {
           status: "complete",
           task_id,
-          result: rawResult,
-          agent_instruction: `Task complete. Call novada_scraper_result with task_id="${task_id}" to retrieve formatted results. Or read the result field above directly if it contains the data you need.`,
+          agent_instruction: `Task complete. Call novada_scraper_result with task_id="${task_id}" to retrieve formatted results.`,
         },
         null,
         2
@@ -293,12 +308,17 @@ export async function novadaScraperStatus(
         2
       );
 
+    // L-6: Differentiate running vs pending with distinct behavioral signals
+    // M-6: Include polling ceiling to prevent infinite loops
     case "running":
       return JSON.stringify(
         {
           status: "running",
           task_id,
-          agent_instruction: `Task is actively running. Retry novada_scraper_status in 5–10 seconds. Use exponential backoff: poll at 5s, 10s, 20s, 40s intervals.`,
+          agent_instruction:
+            "Task is actively executing — a result is expected within 60–120 seconds. " +
+            "Retry novada_scraper_status in 10–20 seconds. Use exponential backoff: 10s, 20s, 40s. " +
+            "If status has not changed after 5 minutes of polling, re-submit the task or switch to novada_extract.",
         },
         null,
         2
@@ -310,7 +330,10 @@ export async function novadaScraperStatus(
         {
           status: "pending",
           task_id,
-          agent_instruction: `Task is queued and not yet started. Retry novada_scraper_status in 5–10 seconds. Use exponential backoff: poll at 5s, 10s, 20s, 40s intervals.`,
+          agent_instruction:
+            "Task is queued and not yet started. Retry novada_scraper_status in 5–10 seconds. " +
+            "Use exponential backoff: 5s, 10s, 20s, 40s intervals. " +
+            "If status remains 'pending' after 5 minutes of polling, re-submit with novada_scraper_submit or switch to novada_extract.",
         },
         null,
         2

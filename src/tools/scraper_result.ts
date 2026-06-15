@@ -3,6 +3,7 @@ import { z } from "zod";
 import { SCRAPER_DOWNLOAD_BASE } from "../config.js";
 import { formatAsMarkdown } from "../utils/format.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { TASK_ID_REGEX, TASK_ID_REGEX_MSG } from "./types.js";
 
 // ─── Schema & Types ──────────────────────────────────────────────────────────
 
@@ -10,10 +11,7 @@ export const ScraperResultParamsSchema = z.object({
   task_id: z
     .string()
     .min(1, "task_id is required")
-    .regex(
-      /^[a-zA-Z0-9_\-\.]{1,128}$/,
-      "task_id must be alphanumeric with underscores/hyphens/dots only"
-    )
+    .regex(TASK_ID_REGEX, TASK_ID_REGEX_MSG)
     .describe(
       "The task_id of a completed scraping task. Use novada_scraper_status first to confirm status is 'complete'."
     ),
@@ -39,22 +37,26 @@ export function validateScraperResultParams(
 // Auth: apikey query param (NOT Bearer). api-m.novada.com always 404s — no fallback.
 const RESULT_DOWNLOAD_ENDPOINT = `${SCRAPER_DOWNLOAD_BASE}/scraper_download`;
 
-/** Flatten a potentially nested object for tabular display */
-function flattenRecord(obj: unknown, prefix = ""): Record<string, string> {
+/** Flatten a potentially nested object for tabular display.
+ *  M-1: depth limit prevents stack overflow on deeply nested server responses. */
+function flattenRecord(obj: unknown, prefix = "", depth = 0): Record<string, string> {
   if (obj === null || obj === undefined) return {};
   if (typeof obj !== "object" || Array.isArray(obj)) {
     return { [prefix || "value"]: String(obj) };
+  }
+  if (depth > 10) {
+    return { [prefix || "value"]: JSON.stringify(obj).slice(0, 200) };
   }
   const result: Record<string, string> = {};
   for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
     const key = prefix ? `${prefix}.${k}` : k;
     if (v !== null && typeof v === "object" && !Array.isArray(v)) {
-      Object.assign(result, flattenRecord(v, key));
+      Object.assign(result, flattenRecord(v, key, depth + 1));
     } else if (Array.isArray(v)) {
       if (v.length > 0 && typeof v[0] === "object" && v[0] !== null) {
         const cap = 5;
         v.slice(0, cap).forEach((item, idx) => {
-          Object.assign(result, flattenRecord(item, `${key}.${idx}`));
+          Object.assign(result, flattenRecord(item, `${key}.${idx}`, depth + 1));
         });
         if (v.length > cap)
           result[`${key}._count`] = `${v.length} total (showing first ${cap})`;

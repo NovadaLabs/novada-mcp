@@ -1,7 +1,7 @@
 import axios, { AxiosError } from "axios";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
 import { formatAsMarkdown } from "../utils/format.js";
-import { NovadaError, NovadaErrorCode, makeNovadaError } from "../_core/errors.js";
+import { NovadaError, NovadaErrorCode, makeNovadaError, sanitizeServerMsg } from "../_core/errors.js";
 import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
 
 const SCRAPE_ENDPOINT = `${SCRAPER_API_BASE}/request`;
@@ -47,9 +47,11 @@ export async function submitScrapeTask(
   const RESERVED = new Set(["scraper_name", "scraper_id", "apikey", "api_key", "authorization",
     "scraper_errors", "is_auto_push"]);
 
+  // H-4: Block prototype-pollution keys from flowing to form/JSON
+  const BLOCKED_KEYS = new Set(["__proto__", "constructor", "prototype"]);
   const opParams: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && !RESERVED.has(k.toLowerCase())) {
+    if (v !== undefined && v !== null && !RESERVED.has(k.toLowerCase()) && !BLOCKED_KEYS.has(k)) {
       opParams[k] = v;
     }
   }
@@ -97,7 +99,7 @@ export async function submitScrapeTask(
       11000: "Invalid API key.",
     };
     const msg = errorMessages[body.code] ?? body.msg ?? "Unknown scraper error";
-    throw new Error(`Scraper error (code ${body.code}): ${msg}`);
+    throw new Error(`Scraper error (code ${body.code}): ${sanitizeServerMsg(msg)}`);
   }
 
   // Accept both flat { code:0, data: { task_id: "..." } } and nested { code:0, data: { data: { task_id: "..." } } }
@@ -107,7 +109,7 @@ export async function submitScrapeTask(
     ((inner?.data as Record<string, unknown> | undefined)?.task_id as string | undefined)
   );
   if (!taskId) {
-    throw new Error(`Scraper submit succeeded but no task_id in response: ${JSON.stringify(body)}`);
+    throw new Error(`Scraper submit succeeded but no task_id in response: ${sanitizeServerMsg(JSON.stringify(body))}`);
   }
 
   return taskId;
@@ -162,31 +164,41 @@ async function pollForResult(apiKey: string, taskId: string): Promise<DownloadRe
       if ("organic_results" in bErr || "organic" in bErr || "search_metadata" in bErr) {
         return [{ spider_code: 200 as const, rest: bErr }];
       }
-      throw new Error(`Unexpected download response (code ${errCode ?? "?"}): ${errMsg || JSON.stringify(bErr).slice(0, 150)}`);
+      throw new Error(`Unexpected download response (code ${errCode ?? "?"}): ${sanitizeServerMsg(errMsg || JSON.stringify(bErr).slice(0, 150))}`);
     }
-    throw new Error(`Unexpected download response: ${JSON.stringify(body).slice(0, 200)}`);
+    throw new Error(`Unexpected download response: ${sanitizeServerMsg(JSON.stringify(body).slice(0, 200))}`);
   }
 
-  throw new Error(`Scraper task ${taskId} timed out after ${POLL_TIMEOUT_MS / 1000}s. task_id="${taskId}" — the task may still be running. This is a transient error; retry the same call.`);
+  // H-8: Use NovadaError(TASK_PENDING) instead of generic Error to avoid
+  // classifyError mismatching "timed out" → URL_UNREACHABLE
+  throw makeNovadaError(
+    NovadaErrorCode.TASK_PENDING,
+    `Scraper poll exceeded ${POLL_TIMEOUT_MS / 1000}s for task_id="${taskId}". The task may still be running server-side.`,
+    "poll_timeout"
+  );
 }
 
-/** Flatten a potentially nested object for tabular display */
-function flattenRecord(obj: unknown, prefix = ""): Record<string, string> {
+/** Flatten a potentially nested object for tabular display.
+ *  M-1: depth limit prevents stack overflow on deeply nested server responses. */
+function flattenRecord(obj: unknown, prefix = "", depth = 0): Record<string, string> {
   if (obj === null || obj === undefined) return {};
   if (typeof obj !== "object" || Array.isArray(obj)) {
     return { [prefix || "value"]: String(obj) };
+  }
+  if (depth > 10) {
+    return { [prefix || "value"]: JSON.stringify(obj).slice(0, 200) };
   }
   const result: Record<string, string> = {};
   for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
     const key = prefix ? `${prefix}.${k}` : k;
     if (v !== null && typeof v === "object" && !Array.isArray(v)) {
-      Object.assign(result, flattenRecord(v, key));
+      Object.assign(result, flattenRecord(v, key, depth + 1));
     } else if (Array.isArray(v)) {
       if (v.length > 0 && typeof v[0] === "object" && v[0] !== null) {
         // Array of objects — flatten first 5; add truncation hint if more exist
         const cap = 5;
         v.slice(0, cap).forEach((item, idx) => {
-          Object.assign(result, flattenRecord(item, `${key}.${idx}`));
+          Object.assign(result, flattenRecord(item, `${key}.${idx}`, depth + 1));
         });
         if (v.length > cap) result[`${key}._count`] = `${v.length} total (showing first ${cap})`;
       } else {
@@ -218,16 +230,22 @@ function extractRecords(data: unknown): Record<string, unknown>[] {
 
 // Aliases for stale or non-canonical operation IDs that appeared in old docs/examples.
 // Maps a near-miss op ID an agent might guess → the canonical op ID the backend accepts.
-const OPERATION_ALIASES: Record<string, string> = {
-  "amazon_product_by-keywords": "amazon_product_keywords",
-  "amazon_product_by-asin":     "amazon_product_asin",
-  "google_shopping":            "google_shopping_keywords",
-  "google_shopping_by-keyword": "google_shopping_keywords",
-};
+// H-1: null-prototype object prevents __proto__/constructor/toString lookup pollution.
+export const OPERATION_ALIASES: Record<string, string> = Object.assign(
+  Object.create(null) as Record<string, string>,
+  {
+    "amazon_product_by-keywords": "amazon_product_keywords",
+    "amazon_product_by-asin":     "amazon_product_asin",
+    "google_shopping":            "google_shopping_keywords",
+    "google_shopping_by-keyword": "google_shopping_keywords",
+  }
+);
 
 export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, apiKey: string): Promise<string> {
   const { platform, params: opParams, format, limit } = params;
-  const operation = OPERATION_ALIASES[params.operation] ?? params.operation;
+  // H-1: safe lookup — null-prototype + hasOwnProperty guard
+  const hasAlias = Object.prototype.hasOwnProperty.call(OPERATION_ALIASES, params.operation);
+  const operation = hasAlias ? OPERATION_ALIASES[params.operation] : params.operation;
 
   try {
   // Step 1: Submit task
@@ -252,7 +270,7 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
     resultItems = await pollForResult(apiKey, taskId);
   } catch (error) {
     if (error instanceof AxiosError) {
-      throw new Error(`Failed to retrieve scraper results: ${error.message}`);
+      throw new Error(`Failed to retrieve scraper results: ${sanitizeServerMsg(error.message)}`);
     }
     throw error;
   }
@@ -337,6 +355,10 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
       ].join("\n");
     }
 
+    // M-4: CLI/SDK formats that reach here via ScrapeParamsFullType — render as markdown with a notice
+    case "csv":
+    case "html":
+    case "xlsx":
     case "markdown":
     default:
       return [
@@ -368,38 +390,25 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
       // Surface any known canonical aliases for the operation the agent tried, so the
       // agent can self-correct a near-miss op ID without a second round-trip. Most 11006
       // errors are malformed/non-canonical op IDs, NOT a deactivated Scraper API.
-      const aliasHint = OPERATION_ALIASES[params.operation]
-        ? `The operation '${params.operation}' was automatically resolved to canonical ID '${OPERATION_ALIASES[params.operation]}', which was submitted but still rejected. The canonical ID itself may be incorrect for this platform, or Scraper API access is not activated. Read novada://scraper-platforms to confirm the exact operation ID.`
+      // H-7: Re-throw as NovadaError so index.ts sets isError: true
+      const aliasHint = hasAlias
+        ? `The operation '${params.operation}' was auto-resolved to '${OPERATION_ALIASES[params.operation]}' but still rejected. The canonical ID itself may be wrong for this platform.`
         : `The operation '${operation}' was rejected. Operation IDs are exact and cannot be guessed.`;
-      return JSON.stringify({
-        status: "unavailable",
-        code: 11006,
-        reason: "Scraper returned code 11006 — almost always an invalid/non-canonical operation ID, not a deactivated Scraper API.",
-        operation_tried: params.operation,
-        ...(operation !== params.operation ? { operation_resolved: operation } : {}),
-        ...(OPERATION_ALIASES[params.operation]
-          ? { alias_resolved_to: OPERATION_ALIASES[params.operation] }
-          : {}),
-        agent_instruction: `${aliasHint} To find the exact operation ID for platform '${platform}', read the novada://scraper-platforms resource — it lists every valid operation per platform. Only if the operation ID is confirmed correct should you treat this as a Scraper API activation issue. Do not retry automatically with the same ID.`,
-        alternatives: [
-          "Use novada_extract for general web page content extraction.",
-          "Use novada_unblock for bot-protected pages.",
-          "Use novada_crawl for multi-page site traversal.",
-        ],
-        next_steps: [
-          "Read novada://scraper-platforms to confirm the canonical operation ID.",
-          "If the operation ID is confirmed correct, activate Scraper API at: https://dashboard.novada.com/overview/scraper/",
-        ],
-      }, null, 2);
+      throw new NovadaError({
+        code: NovadaErrorCode.PRODUCT_UNAVAILABLE,
+        message: `Scraper code 11006 for '${operation}' on '${platform}'. ${aliasHint}`,
+        agent_instruction:
+          `${aliasHint} Read novada://scraper-platforms to confirm the exact operation ID. ` +
+          `Alternatives: novada_extract (general pages), novada_unblock (bot-protected), novada_crawl (multi-page). ` +
+          `Only treat as an activation issue if the operation ID is confirmed correct. Do not retry with the same ID.`,
+        retryable: false,
+        detail: hasAlias ? `alias:${params.operation}→${OPERATION_ALIASES[params.operation]}` : "code 11006",
+      });
     }
 
+    // H-7: Re-throw 11008 as NovadaError so index.ts sets isError: true
     if (err instanceof NovadaError && err.code === NovadaErrorCode.INVALID_PARAMS && err.detail === "code 11008") {
-      return JSON.stringify({
-        status: "error",
-        code: 11008,
-        reason: err.message,
-        agent_instruction: "This is a parameter error — do not retry. Check scraper_name and scraper_id are valid. Use the novada://scraper-platforms resource to find supported platforms.",
-      }, null, 2);
+      throw err;
     }
 
     // All other errors (network, timeout, poll failure, missing task_id): re-throw

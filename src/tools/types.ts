@@ -230,10 +230,16 @@ export function validateProxyParams(args: Record<string, unknown> | undefined): 
 
 // ─── Scrape Params ────────────────────────────────────────────────────────────
 
+/** Shared regex for task_id validation across scraper tools (L-2: single source of truth) */
+export const TASK_ID_REGEX = /^[a-zA-Z0-9_\-\.]{1,128}$/;
+export const TASK_ID_REGEX_MSG = "task_id must be alphanumeric with underscores/hyphens/dots only";
+
 const scrapeBase = {
-  platform: z.string().min(1)
+  platform: z.string().min(1).max(100)
+    .regex(/^[a-zA-Z0-9._\-]+$/, "platform must be a valid domain name (alphanumeric, dots, hyphens)")
     .describe("Platform domain to scrape. E.g. 'amazon.com', 'reddit.com', 'tiktok.com', 'linkedin.com', 'google.com'."),
-  operation: z.string().min(1)
+  operation: z.string().min(1).max(100)
+    .regex(/^[a-zA-Z0-9_\-]+$/, "operation must be alphanumeric with underscores/hyphens")
     .describe("Scraping operation ID. Examples: 'amazon_product_keywords', 'amazon_product_asin', 'tiktok_posts_url', 'linkedin_company_information_url', 'github_repository_repo-url', 'twitter_profile_username', 'youtube_video_search_label'. Read novada://scraper-platforms resource for the complete list with required params."),
   params: z.record(z.string(), z.unknown()).default({})
     .describe("Operation-specific parameters. E.g. { keyword: 'iphone 16', num: 5 } for keyword search, { url: 'https://...' } for URL-based ops, { asin: 'B09...' } for ASIN lookup."),
