@@ -236,13 +236,13 @@
       <span class="en">Novada MCP Update Log</span>
     </h1>
     <p>
-      <span class="zh">本次会话的全部工作记录:Scraper 状态竞态修复、Google Shopping 操作 ID 校验、版本号对账,以及 <code>scrape.ts</code> 的自纠错改进。</span>
-      <span class="en">A complete record of this session's work: Scraper status race-condition fix, Google Shopping operation-ID verification, version reconciliation, and the self-correcting <code>scrape.ts</code> improvements.</span>
+      <span class="zh">本次会话的全部工作记录:Scraper 状态竞态修复、Google Shopping 操作 ID 校验、版本号对账、<code>scrape.ts</code> 自纠错改进,以及 4-agent 对抗性安全审计(23 项修复)。</span>
+      <span class="en">Complete session record: Scraper status race-condition fix, Google Shopping operation-ID verification, version reconciliation, <code>scrape.ts</code> self-correcting improvements, and a 4-agent adversarial security audit (23 fixes).</span>
     </p>
     <div class="meta-row">
       <span class="meta-pill"><span class="zh">版本</span><span class="en">Version</span> <b>v0.8.0</b></span>
       <span class="meta-pill"><span class="zh">日期</span><span class="en">Date</span> <b>2026-06-15</b></span>
-      <span class="meta-pill">HEAD <b>c4f3b42</b></span>
+      <span class="meta-pill">HEAD <b>1989f06</b></span>
       <span class="meta-pill">KR-1</span>
     </div>
   </header>
@@ -389,6 +389,81 @@ WHERE slug = 'novada-mcp';</code></pre>
       <b><span class="zh">已推送:</span><span class="en">Pushed:</span></b>
       <span class="zh">本节改动已与 <code>update-log.html</code> 一并提交并推送(commit <code>c4f3b42</code>)。</span>
       <span class="en">These changes were committed &amp; pushed together with <code>update-log.html</code> (commit <code>c4f3b42</code>).</span>
+    </div>
+  </section>
+
+  <!-- ADVERSARIAL AUDIT -->
+  <section>
+    <h2>
+      <span class="task-badge badge-x">+</span>
+      <span class="zh">对抗性安全审计 — 23 项修复</span>
+      <span class="en">Adversarial Security Audit — 23 Fixes</span>
+      <span class="status status-done" style="float:right;">
+        <span class="zh">✓ 23/23 已修复</span><span class="en">✓ 23/23 Fixed</span>
+      </span>
+    </h2>
+    <p class="sub">
+      <span class="zh">7 个文件 · 156 行新增 / 82 行删除 · commit <code>1989f06</code></span>
+      <span class="en">7 files · 156 insertions / 82 deletions · commit <code>1989f06</code></span>
+    </p>
+
+    <h3><span class="zh">方法</span><span class="en">Method</span></h3>
+    <p>
+      <span class="zh">部署 4 个对抗性 agent 并行攻击同一代码库,每个 agent 拥有不同攻击面:</span>
+      <span class="en">Dispatched 4 adversarial agents in parallel, each targeting a different attack surface:</span>
+    </p>
+    <table>
+      <tr>
+        <th><span class="zh">Agent</span><span class="en">Agent</span></th>
+        <th><span class="zh">攻击面</span><span class="en">Attack Surface</span></th>
+        <th><span class="zh">发现</span><span class="en">Findings</span></th>
+      </tr>
+      <tr>
+        <td><span class="zh">安全</span><span class="en">Security</span></td>
+        <td><span class="zh">注入、密钥泄漏、原型污染</span><span class="en">Injection, key leak, prototype pollution</span></td>
+        <td>2 CRITICAL · 5 HIGH · 4 MEDIUM</td>
+      </tr>
+      <tr>
+        <td><span class="zh">边缘用例</span><span class="en">Edge-Case</span></td>
+        <td><span class="zh">畸形输入、空值、栈溢出</span><span class="en">Malformed input, null/empty, stack overflow</span></td>
+        <td>4 BUG · 3 WARN</td>
+      </tr>
+      <tr>
+        <td><span class="zh">Agent 行为</span><span class="en">Agent Behavior</span></td>
+        <td><span class="zh">重试陷阱、isError、状态机</span><span class="en">Retry traps, isError flag, state machine</span></td>
+        <td>4 AGENT-TRAP · 3 CONFUSING</td>
+      </tr>
+      <tr>
+        <td><span class="zh">跨文件兼容</span><span class="en">Cross-File Compat</span></td>
+        <td><span class="zh">别名不对称、URL 硬编码、类型不一致</span><span class="en">Alias asymmetry, hardcoded URLs, type mismatch</span></td>
+        <td>3 INCOMPATIBLE · 4 INCONSISTENT</td>
+      </tr>
+    </table>
+
+    <h3>CRITICAL</h3>
+    <ul>
+      <li><b>C-1</b> <span class="zh"><code>JSON.stringify(body)</code> 在错误消息中泄漏 API key(JSON 字段模式未被 <code>sanitizeServerMsg</code> 剥离)。</span><span class="en"><code>JSON.stringify(body)</code> in error messages leaked API key as JSON fields — not caught by <code>sanitizeServerMsg</code>.</span></li>
+      <li><b>C-2</b> <span class="zh"><code>platform</code>/<code>operation</code> 无 Zod 正则 — 换行符/markdown 注入 = agent 提示注入攻击面。</span><span class="en"><code>platform</code>/<code>operation</code> had no Zod regex — newlines/markdown = prompt injection into tool output.</span></li>
+    </ul>
+
+    <h3><span class="zh">关键 HIGH 修复</span><span class="en">Key HIGH Fixes</span></h3>
+    <ul>
+      <li><b>H-1</b> <span class="zh">原型污染:<code>OPERATION_ALIASES["__proto__"]</code> 返回 <code>Object.prototype</code>。改用 <code>Object.create(null)</code>。</span><span class="en">Prototype pollution: <code>OPERATION_ALIASES["__proto__"]</code> returned <code>Object.prototype</code>. Fixed with <code>Object.create(null)</code>.</span></li>
+      <li><b>H-6</b> <span class="zh"><code>scraper_submit.ts</code> 未应用别名 — agent 在 <code>novada_scrape</code> 学到的别名在 <code>submit</code> 会失败。</span><span class="en"><code>scraper_submit.ts</code> missing alias resolution — aliases learned from <code>novada_scrape</code> failed in <code>submit</code>.</span></li>
+      <li><b>H-7</b> <span class="zh">11006/11008 返回 JSON 字符串 → <code>isError: false</code>。agent 当作成功处理。改为重新抛出 <code>NovadaError</code>。</span><span class="en">11006/11008 returned JSON strings → <code>isError: false</code>. Agent treated errors as success. Fixed: re-throw <code>NovadaError</code>.</span></li>
+      <li><b>H-8</b> <span class="zh">轮询超时被 <code>classifyError</code> 误判为 <code>URL_UNREACHABLE</code>,agent 被引导用 <code>novada_unblock</code>。</span><span class="en">Poll timeout misclassified as <code>URL_UNREACHABLE</code> — agent told to use <code>novada_unblock</code> instead of retrying.</span></li>
+    </ul>
+
+    <div class="callout">
+      <b><span class="zh">跨 agent 共识:</span><span class="en">Cross-Agent Consensus:</span></b>
+      <span class="zh">原型污染(安全+边缘)、URL 硬编码(安全+兼容)、<code>flattenRecord</code> 栈溢出(边缘+安全)、别名不对称(兼容+行为)— 被 2+ 个 agent 独立发现的问题是高置信度真阳性。</span>
+      <span class="en">Prototype pollution (Security+Edge), hardcoded URLs (Security+Compat), <code>flattenRecord</code> stack overflow (Edge+Security), alias asymmetry (Compat+Agent) — issues found by 2+ agents are high-confidence true positives.</span>
+    </div>
+
+    <div class="callout">
+      <b><span class="zh">验证:</span><span class="en">Verification:</span></b>
+      <span class="zh">Round 3 验证器确认 23/23 全部修复。<code>npm run build</code> 通过。</span>
+      <span class="en">Round 3 verifier confirmed 23/23 all fixed. <code>npm run build</code> passed.</span>
     </div>
   </section>
 
