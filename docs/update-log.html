@@ -306,6 +306,53 @@ WHERE slug = 'novada-mcp';</code></pre>
     </div>
   </details>
 
+  <!-- F: Dashboard page -->
+  <details class="card">
+    <summary>
+      <span class="tag tag-feat">FEAT</span>
+      <span>
+        <span class="zh">Dashboard 页 — 12 集成 + 配置抽屉</span>
+        <span class="en">Dashboard Page — 12 Integrations + Config Drawer</span>
+      </span>
+      <span class="chip">landing/dashboard.html</span>
+    </summary>
+    <div class="body">
+      <p>
+        <span class="zh">仿 BrightData <code>/cp/mcp</code> 布局,完整构建 Novada MCP 控制台页。</span>
+        <span class="en">BrightData <code>/cp/mcp</code>-inspired layout, built as Novada MCP console page.</span>
+      </p>
+      <p><b><span class="zh">功能</span><span class="en">Features</span></b></p>
+      <ul>
+        <li>
+          <span class="zh">12 个集成卡片,带官方 Logo — Cursor、Claude Desktop、Claude Code、OpenAI SDK/Agent Builder/Codex（内联 SVG）、LangChain、n8n、LlamaIndex、CrewAI、Windsurf、Cline</span>
+          <span class="en">12 integration cards with official logos — Cursor, Claude Desktop, Claude Code, OpenAI SDK/Agent Builder/Codex (inline SVG), LangChain, n8n, LlamaIndex, CrewAI, Windsurf, Cline</span>
+        </li>
+        <li>
+          <span class="zh">点击任意卡片弹出右侧抽屉,显示该集成的精确 MCP 配置 snippet（自动代入 API key）、3 步安装指引、官方文档链接</span>
+          <span class="en">Click any card → slide-in drawer with exact MCP config snippet (API key pre-filled from localStorage), 3 setup steps, and official docs link</span>
+        </li>
+        <li>
+          <span class="zh">API key 存 <code>localStorage</code>,支持掩码显示、一键复制 URL、Edit 模式更新 key</span>
+          <span class="en">API key stored in <code>localStorage</code> — masked display, one-click URL copy, Edit modal to update key</span>
+        </li>
+        <li>
+          <span class="zh">亮/暗主题切换，无 FOCT（内联 IIFE）</span>
+          <span class="en">Light/dark theme toggle, FOCT-free (inline IIFE)</span>
+        </li>
+      </ul>
+      <p><b><span class="zh">Logo 来源</span><span class="en">Logo sources</span></b></p>
+      <ul>
+        <li><span class="zh">9 个集成：<code>cdn.simpleicons.org/[slug]/ffffff</code></span><span class="en">9 integrations: <code>cdn.simpleicons.org/[slug]/ffffff</code></span></li>
+        <li><span class="zh">3 个 OpenAI（SDK / Agent Builder / Codex）：内联 SVG path，避免 CDN 404</span><span class="en">3 OpenAI (SDK / Agent Builder / Codex): inline SVG path, bypasses CDN 404</span></li>
+      </ul>
+      <div class="note">
+        <b><span class="zh">覆盖的集成配置：</span><span class="en">Config snippets verified for:</span></b>
+        <span class="zh">Claude Desktop (JSON)、Claude Code (bash CLI)、Cursor (JSON)、OpenAI Agents SDK (Python)、OpenAI Responses API (Python)、LangChain (Python)、n8n (UI node)、LlamaIndex (Python)、CrewAI (Python)、Windsurf (serverUrl JSON)、Cline (streamableHttp JSON)、Codex CLI (TOML)</span>
+        <span class="en">Claude Desktop (JSON), Claude Code (bash CLI), Cursor (JSON), OpenAI Agents SDK (Python), OpenAI Responses API (Python), LangChain (Python), n8n (UI node), LlamaIndex (Python), CrewAI (Python), Windsurf (serverUrl JSON), Cline (streamableHttp JSON), Codex CLI (TOML)</span>
+      </div>
+    </div>
+  </details>
+
   <div class="foot">Novada MCP · Plywood Protocol + AAM</div>
 
 </div>
