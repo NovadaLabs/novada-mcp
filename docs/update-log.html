@@ -146,14 +146,49 @@
       <span class="zh">Novada MCP 更新日志</span>
       <span class="en">Novada MCP Update Log</span>
     </h1>
-    <div class="sub">v0.8.0 · 2026-06-15 · HEAD ee94e3e</div>
+    <div class="sub">v0.8.0 · 2026-06-18 · HEAD 8ad2c1b</div>
     <div class="pills">
-      <span class="pill">KR-1</span>
-      <span class="pill">5 <span class="zh">任务</span><span class="en">tasks</span></span>
-      <span class="pill">23 <span class="zh">安全修复</span><span class="en">security fixes</span></span>
-      <span class="pill">7 <span class="zh">文件</span><span class="en">files</span></span>
+      <span class="pill">KR-6</span>
+      <span class="pill">9 <span class="zh">任务</span><span class="en">tasks</span></span>
+      <span class="pill">12 <span class="zh">工具</span><span class="en">tools</span></span>
+      <span class="pill">3 <span class="zh">里程碑</span><span class="en">milestones</span></span>
     </div>
   </div>
+
+  <!-- KR-6 M-6.2 + M-6.3: 4 new tools -->
+  <details class="card" open>
+    <summary>
+      <span class="tag tag-feat">FEAT</span>
+      <span>
+        <span class="zh">KR-6 M-6.2 + M-6.3 完成 — 4 个新工具</span>
+        <span class="en">KR-6 M-6.2 + M-6.3 Complete — 4 New Tools</span>
+      </span>
+      <span class="chip">8ad2c1b</span>
+    </summary>
+    <div class="body">
+      <p>
+        <span class="zh">4 个并行 sub-agent 实现，Orchestrator (Opus) 独立 review。1 个 HIGH bug（<code>task_download</code> 字段名错误）在 review 中发现并修复。</span>
+        <span class="en">4 parallel sub-agents implemented, Orchestrator (Opus) independent review. 1 HIGH bug (<code>task_download</code> wrong field name) caught in review and fixed before commit.</span>
+      </p>
+      <table>
+        <tr><th>Issue</th><th><span class="zh">工具</span><span class="en">Tool</span></th><th>Actions</th><th><span class="zh">类型</span><span class="en">Type</span></th></tr>
+        <tr><td>INC-110</td><td><code>novada_static_ip_mgmt</code></td><td>open · renew · export · list</td><td><span class="zh">读+写(confirm)</span><span class="en">R+W(confirm)</span></td></tr>
+        <tr><td>INC-111</td><td><code>novada_ip_whitelist</code></td><td>add · list · del · remark</td><td><span class="zh">读+写(confirm)</span><span class="en">R+W(confirm)</span></td></tr>
+        <tr><td>INC-112</td><td><code>novada_scraper_task</code></td><td>list · status · download · last_status</td><td><span class="zh">只读</span><span class="en">Read-only</span></td></tr>
+        <tr><td>INC-113</td><td><code>novada_capture_apikey</code></td><td>get · reset</td><td><span class="zh">读+写(confirm)</span><span class="en">R+W(confirm)</span></td></tr>
+      </table>
+      <p><b><span class="zh">WRITE 安全门控：</span><span class="en">WRITE safety gates:</span></b></p>
+      <ul>
+        <li><span class="zh"><code>open</code>/<code>renew</code>（静态 IP）、<code>add</code>/<code>del</code>（白名单）、<code>reset</code>（API key）— 均需 <code>confirm:true</code>，否则仅返回预览</span>
+            <span class="en"><code>open</code>/<code>renew</code> (static IP), <code>add</code>/<code>del</code> (whitelist), <code>reset</code> (API key) — all require <code>confirm:true</code>, otherwise return preview only</span></li>
+      </ul>
+      <div class="note">
+        <b><span class="zh">Review 发现（已修复）：</span><span class="en">Review finding (fixed):</span></b>
+        <span class="zh"><code>task_download</code> 发送 <code>task_id</code>（单数），API 期望 <code>task_ids</code>（复数）+ 缺少必填 <code>file_type</code> 字段。运行时会返回 <code>code:10001</code>。已在 commit 前修复。</span>
+        <span class="en"><code>task_download</code> sent <code>task_id</code> (singular), API expects <code>task_ids</code> (plural) + missing required <code>file_type</code> field. Would return <code>code:10001</code> at runtime. Fixed before commit.</span>
+      </div>
+    </div>
+  </details>
 
   <!-- A: Race fix -->
   <details class="card">
