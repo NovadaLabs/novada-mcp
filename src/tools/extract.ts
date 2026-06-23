@@ -4,6 +4,7 @@ import { matchHeadingSectionWithReason } from "../utils/fields.js";
 import type { ExtractParams } from "./types.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 import { getCached, setCached } from "../_core/session-cache.js";
+import { TIMEOUTS } from "../config.js";
 
 export { detectJsHeavyContent } from "../utils/index.js";
 
@@ -31,12 +32,31 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
       urls.map((url, i) =>
         extractSingle({ ...params, url }, apiKey)
           .then(content => ({ i, url, content, ok: true }))
-          .catch(err => ({ i, url, content: `Error: ${err instanceof Error ? err.message : String(err)}`, ok: false }))
+          .catch(err => {
+            const message = err instanceof Error ? err.message : String(err);
+            const fix = getSuggestedFix(url, message);
+            return { i, url, content: `Error: ${message}\n${fix}`, ok: false };
+          })
       )
     );
 
     const successful = results.filter(r => r.ok).length;
     const failed = results.length - successful;
+
+    // Fix 3: Cap total batch output to ~25K chars to prevent host systems from saving to file
+    const MAX_BATCH_TOTAL = 25000;
+    const rawTotal = results.reduce((sum, r) => sum + r.content.length, 0);
+    let batchTruncated = false;
+    if (rawTotal > MAX_BATCH_TOTAL) {
+      const perUrlLimit = Math.max(500, Math.floor(MAX_BATCH_TOTAL / results.length));
+      for (const r of results) {
+        if (r.content.length > perUrlLimit) {
+          r.content = r.content.slice(0, perUrlLimit) +
+            `\n\n[truncated at ${perUrlLimit} chars — call novada_extract with this URL individually for full content]`;
+          batchTruncated = true;
+        }
+      }
+    }
 
     const lines: string[] = [
       `## Batch Extract Results`,
@@ -58,7 +78,10 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
 
     lines.push(`## Agent Hints`);
     if (failed > 0) {
-      lines.push(`- ${failed} URL(s) failed. Check if they require JavaScript rendering.`);
+      lines.push(`- ${failed} URL(s) failed. Each failure includes a suggested_fix — read the error block above for per-URL guidance.`);
+    }
+    if (batchTruncated) {
+      lines.push(`- Batch output capped at ~${MAX_BATCH_TOTAL} chars total (${rawTotal} raw). Call novada_extract with individual URLs for full content.`);
     }
     lines.push(`- Use novada_map to discover additional pages on any of these domains.`);
 
@@ -70,6 +93,7 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
     return await extractSingle({ ...params, url: urlList[0] }, apiKey);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    const suggestedFix = getSuggestedFix(urlList[0], message);
     return [
       `## Extract Failed`,
       `url: ${urlList[0]}`,
@@ -80,8 +104,39 @@ export async function novadaExtract(params: ExtractParams, apiKey?: string): Pro
       `- If the URL returns JSON or binary data, it cannot be extracted as HTML.`,
       `- If the URL is unreachable, check the domain and try novada_map first.`,
       `- For JS-heavy pages returning empty content, try with render="render".`,
+      ``,
+      `## Agent Action`,
+      `agent_instruction: status:failed | ${suggestedFix}`,
     ].join("\n");
   }
+}
+
+/** Derive a suggested_fix hint from a URL + error message */
+function getSuggestedFix(url: string, errorMsg: string): string {
+  const lower = errorMsg.toLowerCase();
+  // Known anti-bot / access-denial patterns
+  if (lower.includes("bot") || lower.includes("challenge") || lower.includes("captcha") ||
+      lower.includes("cloudflare") || lower.includes("403") || lower.includes("forbidden") ||
+      lower.includes("access denied") || lower.includes("blocked")) {
+    return `suggested_fix: retry with render="render" (JS rendering + anti-bot bypass). If that also fails: novada_unblock(url="${url}") returns raw HTML via stealth browser — parse the response body manually`;
+  }
+  if (lower.includes("all promises were rejected") || lower.includes("eai_again") ||
+      lower.includes("econnrefused") || lower.includes("enotfound") || lower.includes("timeout")) {
+    return `suggested_fix: domain may be unreachable or rate-limiting. Verify URL is correct, then retry with render="render". Run novada_health_all() to check API status`;
+  }
+  if (lower.includes("js") || lower.includes("javascript") || lower.includes("js-heavy")) {
+    return `suggested_fix: retry with render="render" for JavaScript-rendered pages`;
+  }
+  // Domain-specific overrides
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+    if (host === "zhihu.com") return `suggested_fix: zhihu.com blocks automated access. Use render="render" first; if blocked, novada_unblock returns raw HTML. Alternatively search via novada_search`;
+    if (host === "amazon.com") return `suggested_fix: try novada_scrape(platform="amazon.com", operation="amazon_product_keywords") for structured product data`;
+    if (host === "x.com" || host === "twitter.com") return `suggested_fix: try novada_scrape(platform="x.com", operation="twitter_profile_username") for Twitter/X data`;
+    if (host === "instagram.com") return `suggested_fix: try novada_scrape(platform="instagram.com", operation="instagram_profile_url")`;
+    if (host === "linkedin.com") return `suggested_fix: try novada_scrape(platform="linkedin.com", operation="linkedin_company_information_url")`;
+  } catch { /* ignore */ }
+  return `suggested_fix: retry with render="render" for JS-heavy pages. If blocked: novada_unblock(url="${url}") returns raw HTML via stealth browser`;
 }
 
 function rewriteRedditUrl(url: string): string | null {
@@ -98,7 +153,8 @@ function rewriteRedditUrl(url: string): string | null {
   }
 }
 
-async function extractSingle(
+/** Core extraction logic — called via extractSingle which enforces the total request ceiling. */
+async function extractSingleInner(
   params: ExtractParams & { url: string },
   apiKey?: string
 ): Promise<string> {
@@ -107,9 +163,9 @@ async function extractSingle(
     params = { ...params, render: "render" };
   }
 
-  // Phase 3: Session dedup cache — skip fetch if same URL+mode was extracted recently
+  // Phase 3: Session dedup cache — skip fetch if same URL+mode+fields was extracted recently
   const cacheRenderMode = params.render ?? "auto";
-  const cached = getCached(params.url, cacheRenderMode);
+  const cached = getCached(params.url, cacheRenderMode, params.fields);
   if (cached) {
     // Inject source: cache into the cached result so agents know it's from cache
     return cached.replace(/source: live/, "source: cache");
@@ -143,10 +199,12 @@ async function extractSingle(
 
   // Force modes (or registry-resolved modes) skip escalation logic
   if (effectiveMode === "browser") {
-    html = await fetchViaBrowser(params.url);
+    html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
     usedMode = "browser";
   } else if (effectiveMode === "render") {
-    const response = await fetchWithRender(params.url, apiKey);
+    const response = await fetchWithRender(params.url, apiKey,
+      domainHint?.proxyTier ? { proxyTier: domainHint.proxyTier } : {}
+    );
     const contentType = String((response.headers as Record<string, string>)?.["content-type"] ?? "");
     if (isPdfResponse(params.url, contentType)) {
       const pdfBuffer = Buffer.isBuffer(response.data)
@@ -173,13 +231,26 @@ async function extractSingle(
       }
       html = response.data;
     }
-    usedMode = "render";
+    // QW-4: If rendered content is suspiciously short, it may be a bot-challenge page
+    // that passed detectBotChallenge — attempt browser escalation before accepting
+    if (typeof html === "string" && html.length < 2000 && detectBotChallenge(html) && isBrowserConfigured()) {
+      const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms }).catch(() => null);
+      if (browserHtml && browserHtml.length > html.length) {
+        html = browserHtml;
+        usedMode = "browser";
+      } else {
+        usedMode = "render";
+      }
+    } else {
+      usedMode = "render";
+    }
   } else {
     // Auto or static:
     // P1-2: Race a direct HTTP fetch (no proxy) against the proxy for "auto" mode.
     // Open static sites (HN, TechCrunch, Wikipedia) respond in ~300ms direct vs ~3s via proxy.
     // Direct "wins" only if it returns clean HTML (no bot challenge, no JS-heavy indicators).
     // Bot-protected or JS-heavy: direct rejects, proxy result is used — no change in behavior.
+    const domainProxyTier = domainHint?.proxyTier;
     const response = await (effectiveMode === "auto"
       ? Promise.any([
           fetchWithRetry(params.url, { headers: { "User-Agent": USER_AGENT }, timeout: 3000 })
@@ -188,9 +259,9 @@ async function extractSingle(
               if (body && !detectBotChallenge(body) && !detectJsHeavyContent(body)) return r;
               throw new Error("not-static");
             }),
-          fetchViaProxy(params.url, apiKey),
+          fetchViaProxy(params.url, apiKey, domainProxyTier ? { proxyTier: domainProxyTier } : {}),
         ])
-      : fetchViaProxy(params.url, apiKey));
+      : fetchViaProxy(params.url, apiKey, domainProxyTier ? { proxyTier: domainProxyTier } : {}));
     const contentType = String((response.headers as Record<string, string>)?.["content-type"] ?? "");
     if (isPdfResponse(params.url, contentType)) {
       const pdfBuffer = Buffer.isBuffer(response.data)
@@ -232,7 +303,7 @@ async function extractSingle(
           detectedAntiBot = detectedAntiBot ?? identifyAntiBot(renderHtml);
           // Render returned a bot challenge page — escalate to browser if available
           if (isBrowserConfigured()) {
-            html = await fetchViaBrowser(params.url);
+            html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
             usedMode = "browser";
             antiBotResolved = true;
           } else {
@@ -246,7 +317,7 @@ async function extractSingle(
           antiBotResolved = detectedAntiBot !== null;
         } else if (isBrowserConfigured()) {
           // render also JS-heavy — try full browser
-          html = await fetchViaBrowser(params.url);
+          html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
           usedMode = "browser";
           antiBotResolved = true;
         } else {
@@ -258,7 +329,7 @@ async function extractSingle(
         // render threw — try Browser API if available
         renderError = err instanceof Error ? err.message : String(err);
         if (isBrowserConfigured()) {
-          html = await fetchViaBrowser(params.url);
+          html = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
           usedMode = "browser";
           antiBotResolved = true;
         } else {
@@ -314,7 +385,7 @@ async function extractSingle(
     .slice(0, 15);
 
   // P0-5: max_chars truncation — applies to ALL formats (text, markdown, html handled separately)
-  const MAX_CHARS_DEFAULT = 25000;
+  const MAX_CHARS_DEFAULT = 50000;
   const maxChars = params.max_chars ?? MAX_CHARS_DEFAULT;
 
   if (params.format === "text") {
@@ -384,7 +455,7 @@ async function extractSingle(
     // If render escalation didn't improve quality enough, try browser as final fallback
     if (quality.score < 40 && isBrowserConfigured()) {
       try {
-        const browserHtml = await fetchViaBrowser(params.url);
+        const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
         const browserMain = extractMainContent(browserHtml, params.url);
         const browserSD = extractStructuredData(browserHtml);
         const browserQuality = scoreExtraction(browserHtml, browserMain, "browser", browserSD !== null);
@@ -542,7 +613,7 @@ async function extractSingle(
     if (isTruncated) hints.push(`Content truncated at ${maxChars} chars (full: ${totalChars}). Pass max_chars=${Math.min(maxChars * 2, 100000)} to get more.`);
     try { hints.push(`Discover more pages: novada_map(url="${new URL(params.url).origin}")`); } catch { /* ignore */ }
     const jsonOutput = JSON.stringify(jsonResult, null, 2);
-    setCached(params.url, cacheRenderMode, jsonOutput);
+    setCached(params.url, cacheRenderMode, jsonOutput, params.fields);
     return jsonOutput;
   }
 
@@ -686,6 +757,10 @@ async function extractSingle(
       lines.push(`- Page is bot-protected. Try: novada_unblock(url="${params.url}") for raw HTML with anti-bot bypass.`);
     }
   }
+  // Low quality on static+auto — guide agent to escalate rendering and/or add proxy
+  if (qLabel === "low" && usedMode === "static" && renderMode === "auto") {
+    lines.push(`- Low quality on static mode — try with render="render" for JS-heavy or anti-bot protected pages.`);
+  }
   if (isTruncated) {
     lines.push(`- Content was truncated at ${maxChars} chars (full: ${totalChars}). Pass max_chars=${Math.min(maxChars * 2, 100000)} to get more, or use novada_map to find specific subpages.`);
   }
@@ -703,6 +778,8 @@ async function extractSingle(
     nextActions.push(`status:success quality:${quality.score}/100`);
     nextActions.push(`next: novada_map for related pages`);
     nextActions.push(`next: novada_research for multi-source analysis`);
+  } else if (quality.score < 30 && usedMode === "static" && renderMode === "auto") {
+    nextActions.push(`status:low_quality | content_ok:false | suggested_fix: retry with render="render" for JS-heavy or bot-protected pages. If render also returns low quality, try render="browser". For sites like airbnb.com/booking.com, also ensure NOVADA_PROXY_ENDPOINT is set for residential IP routing.`);
   } else {
     nextActions.push(`status:low_quality quality:${quality.score}/100`);
     if (usedMode === "static") nextActions.push(`fix: retry with render="render"`);
@@ -712,8 +789,52 @@ async function extractSingle(
   lines.push(`## Agent Action`);
   lines.push(`agent_instruction: ${nextActions.join(" | ")}`);
   const mdOutput = lines.join("\n");
-  setCached(params.url, cacheRenderMode, mdOutput);
+  setCached(params.url, cacheRenderMode, mdOutput, params.fields);
   return mdOutput;
+}
+
+/**
+ * Per-URL entry point with a hard total-request ceiling (TIMEOUTS.TOTAL_REQUEST_CEILING).
+ * Uses Promise.race to guarantee no single URL blocks for more than 45s regardless of
+ * how many auto-escalation steps (static → render → browser) are attempted.
+ * The ceiling is per-URL so batch requests each get their own independent timer.
+ */
+async function extractSingle(
+  params: ExtractParams & { url: string },
+  apiKey?: string
+): Promise<string> {
+  let ceilingTimer: ReturnType<typeof setTimeout> | null = null;
+  const ceiling = new Promise<never>((_, reject) => {
+    ceilingTimer = setTimeout(
+      () => reject(new Error(`TOTAL_REQUEST_CEILING: extractSingle for ${params.url} exceeded ${TIMEOUTS.TOTAL_REQUEST_CEILING}ms`)),
+      TIMEOUTS.TOTAL_REQUEST_CEILING
+    );
+  });
+  try {
+    const result = await Promise.race([
+      extractSingleInner(params, apiKey),
+      ceiling,
+    ]);
+    return result;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.startsWith("TOTAL_REQUEST_CEILING:")) {
+      // Return a structured error string in the same format as other extraction errors
+      // so callers (batch mode, novadaExtract) get usable output rather than a thrown exception.
+      const ceiling_s = TIMEOUTS.TOTAL_REQUEST_CEILING / 1000;
+      return [
+        `## Extraction Error`,
+        `url: ${params.url}`,
+        `error: Request exceeded the ${ceiling_s}s total ceiling and was aborted.`,
+        ``,
+        `## Agent Action`,
+        `agent_instruction: This URL took too long (>${ceiling_s}s). Try render="static" to skip escalation, or novada_scrape for platform-specific data.`,
+      ].join("\n");
+    }
+    throw err;
+  } finally {
+    if (ceilingTimer !== null) clearTimeout(ceilingTimer);
+  }
 }
 
 function formatJsonExtract(url: string, mode: string, jsonStr: string, maxChars?: number): string {

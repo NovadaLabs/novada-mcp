@@ -48,6 +48,9 @@ export function novadaSetup(_params: SetupParams): string {
     : "optional — needed for novada_proxy_* credential generation"));
 
   lines.push("");
+  lines.push("**Unified API Key:** NOVADA_API_KEY covers search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning.");
+  lines.push("**Proxy auto-provision:** If NOVADA_PROXY_ENDPOINT is set, user/pass are auto-fetched from your account — no separate NOVADA_PROXY_USER/PASS needed.");
+  lines.push("");
 
   // ─── Summary ──────────────────────────────────────────────────────────────
 
@@ -55,7 +58,7 @@ export function novadaSetup(_params: SetupParams): string {
     lines.push("**Status: Ready.** Core tools are active.");
     const missing: string[] = [];
     if (!browserWs) missing.push("novada_browser, novada_browser_flow (need NOVADA_BROWSER_WS)");
-    if (!proxyConfigured) missing.push("novada_proxy_* credential generation (need NOVADA_PROXY_USER/PASS/ENDPOINT)");
+    if (!proxyConfigured) missing.push("novada_proxy_* routing (set NOVADA_PROXY_ENDPOINT — user/pass auto-fetched from your account via NOVADA_API_KEY)");
     if (missing.length) {
       lines.push("Optional tools not configured:");
       for (const m of missing) lines.push(`  - ${m}`);

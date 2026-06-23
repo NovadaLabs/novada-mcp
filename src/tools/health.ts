@@ -206,7 +206,7 @@ export async function novadaHealth(apiKey: string): Promise<string> {
         lines.push(`- ${r.label}: Visit ${r.note} to activate`);
       } else if (r.status === "not_configured") {
         if (r.label === "Proxy") {
-          lines.push(`- Proxy: Export NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT`);
+          lines.push(`- Proxy: Set NOVADA_PROXY_ENDPOINT (user/pass auto-provisioned from NOVADA_API_KEY). Or set NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT for explicit credentials.`);
         } else if (r.label === "Browser API") {
           lines.push(`- Browser API: Export NOVADA_BROWSER_WS (get credentials at dashboard.novada.com/overview/browser/)`);
         } else {

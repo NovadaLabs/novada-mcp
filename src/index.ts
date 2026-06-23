@@ -127,6 +127,8 @@ import {
 import { VERSION } from "./config.js";
 import { listPrompts, getPrompt } from "./prompts/index.js";
 import { listResources, readResource } from "./resources/index.js";
+import { checkProxyConfiguration } from "./utils/domains.js";
+import { resolveProxyCredentials } from "./utils/credentials.js";
 
 const API_KEY = process.env.NOVADA_API_KEY?.trim();
 
@@ -150,7 +152,7 @@ const TOOLS = [
 
 **Use for:** Current events, finding URLs, fact lookup, competitive research. Set enrich_top=true to auto-extract the #1 result.
 **Not for:** Reading a known URL (novada_extract), multi-source report (novada_research).
-**Tip:** engine='duckduckgo' is 3x faster than Google and works for most queries.`,
+**Tip:** engine='duckduckgo' is similar speed to google (both use async scraper API), good for privacy-conscious queries.`,
     inputSchema: zodToMcpSchema(SearchParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
   },
@@ -226,7 +228,7 @@ Not for:
 **Best for:** When you need a specific country/city IP, sticky sessions for multi-step workflows, or testing geo-restricted content.
 **Not for:** Web page extraction (use novada_extract — proxy is automatic), web search (use novada_search).
 **Formats:** "url" for Node.js/Python, "env" for shell variables, "curl" for CLI requests.
-**Note:** Requires NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.
+**Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.
 **Specialized tools:** For specific proxy types, use novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, or novada_proxy_dedicated.`,
     inputSchema: zodToMcpSchema(ProxyParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
@@ -240,7 +242,7 @@ Not for:
 **Params:** url (optional), country (ISO 2-letter), city (optional, requires country), session_id (optional for sticky IP).
 **Formats:** "url", "env", "curl".
 **agent_instruction:** Best for geo-restricted content. Use country param for targeting. Strongest anti-bot bypass — escalate here from isp/datacenter when blocked.
-**Requires:** NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
+**Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.`,
     inputSchema: zodToMcpSchema(ProxyResidentialParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
@@ -253,7 +255,7 @@ Not for:
 **Params:** url (optional), country (ISO 2-letter, optional), session_id (optional for sticky IP).
 **Formats:** "url", "env", "curl".
 **agent_instruction:** ISP proxies look like real home users. Best for social/ecommerce. Escalate to novada_proxy_residential for stronger anti-bot.
-**Requires:** NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
+**Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.`,
     inputSchema: zodToMcpSchema(ProxyIspParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
@@ -266,7 +268,7 @@ Not for:
 **Params:** url (optional), country (ISO 2-letter, optional), session_id (optional for sticky IP).
 **Formats:** "url", "env", "curl".
 **agent_instruction:** Fastest proxies. Best for high-volume, non-anti-bot targets. Escalate to isp → residential if blocked.
-**Requires:** NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
+**Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.`,
     inputSchema: zodToMcpSchema(ProxyDatacenterParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
@@ -279,7 +281,7 @@ Not for:
 **Params:** url (optional), country (ISO 2-letter, optional), carrier (optional, e.g. 'verizon'), session_id (optional for sticky IP).
 **Formats:** "url", "env", "curl".
 **agent_instruction:** Mobile IPs. Best for mobile-targeted content and apps. Pair with mobile User-Agent for full simulation.
-**Requires:** NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
+**Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.`,
     inputSchema: zodToMcpSchema(ProxyMobileParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
@@ -292,7 +294,7 @@ Not for:
 **Params:** url (optional), country (ISO 2-letter, REQUIRED), session_id (REQUIRED — determines your dedicated IP).
 **Formats:** "url", "env", "curl".
 **agent_instruction:** Same IP every request. Best for accounts requiring consistent identity. Keep the same session_id for the entire account lifecycle.
-**Requires:** NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
+**Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.`,
     inputSchema: zodToMcpSchema(ProxyStaticParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
@@ -305,7 +307,7 @@ Not for:
 **Params:** url (optional), session_id (REQUIRED — maps to your exclusive dedicated IP).
 **Formats:** "url", "env", "curl".
 **agent_instruction:** Exclusive datacenter IP. Best for high-trust platforms. No other user shares this IP. For human-like IP appearance, use novada_proxy_residential instead.
-**Requires:** NOVADA_PROXY_USER, NOVADA_PROXY_PASS, NOVADA_PROXY_ENDPOINT env vars.`,
+**Requires:** NOVADA_PROXY_ENDPOINT env var. NOVADA_PROXY_USER/PASS are auto-fetched from your account using NOVADA_API_KEY if not explicitly set.`,
     inputSchema: zodToMcpSchema(ProxyDedicatedParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
@@ -387,7 +389,9 @@ Not for:
 **agent_instruction:** Call this first to see all available Novada tools and capabilities — especially useful when starting a new task and you need to find the right tool.
 **Returns:** Markdown table grouped by category — Content Retrieval, Scraping & Verification, Proxy, Browser & Rendering, Health & Discovery, Auth.
 **Filter:** Pass category to narrow to a specific group (e.g. category="Proxy" to see all proxy tools).
-**Status legend:** active = available now; todo = planned but not yet implemented.`,
+**Status legend:** active = available now; todo = planned but not yet implemented.
+
+**KEY FACT: ONE API KEY COVERS ALL PRODUCTS.** NOVADA_API_KEY authenticates search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning. No separate keys needed for most features. If a tool fails, call novada_health_all() to diagnose.`,
     inputSchema: zodToMcpSchema(DiscoverParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
@@ -467,7 +471,9 @@ Not for:
 
 **Use for:** First-time setup, diagnosing missing credentials, getting exact config snippets for Claude Code / Claude Desktop / Cursor / VS Code / Windsurf.
 **Output:** Status of all env vars (NOVADA_API_KEY, NOVADA_BROWSER_WS, NOVADA_PROXY_*), setup commands for all MCP clients, and which tools are currently active.
-**No auth required:** This tool works even when NOVADA_API_KEY is not set.`,
+**No auth required:** This tool works even when NOVADA_API_KEY is not set.
+
+**UNIFIED KEY:** NOVADA_API_KEY is the only required key. It covers search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning. NOVADA_BROWSER_WS and NOVADA_PROXY_ENDPOINT unlock additional capabilities but are optional.`,
     inputSchema: zodToMcpSchema(SetupParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
@@ -636,7 +642,11 @@ class NovadaMCPServer {
 
   constructor() {
     this.server = new Server(
-      { name: "novada", version: VERSION },
+      {
+        name: "novada",
+        version: VERSION,
+        description: "Novada MCP — unified web data API. ONE API KEY (NOVADA_API_KEY) covers all products: search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning. Optional: NOVADA_BROWSER_WS for browser automation, NOVADA_PROXY_ENDPOINT for proxy routing. Call novada_health_all() to verify which products are active.",
+      },
       { capabilities: { tools: {}, prompts: {}, resources: {} } }
     );
     this.setupHandlers();
@@ -884,6 +894,28 @@ class NovadaMCPServer {
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
+
+    // Auto-provision proxy credentials: if NOVADA_PROXY_ENDPOINT is set but
+    // NOVADA_PROXY_USER/PASS are missing, fetch them from /v1/proxy_account/list
+    // using NOVADA_API_KEY as Bearer token, then inject into process.env so the
+    // synchronous getProxyCredentials() picks them up for all proxy tool calls.
+    if (
+      process.env.NOVADA_PROXY_ENDPOINT &&
+      (!process.env.NOVADA_PROXY_USER || !process.env.NOVADA_PROXY_PASS)
+    ) {
+      try {
+        const autoCreds = await resolveProxyCredentials();
+        if (autoCreds) {
+          process.env.NOVADA_PROXY_USER = autoCreds.user;
+          process.env.NOVADA_PROXY_PASS = autoCreds.pass;
+          console.error(`[novada] Auto-provisioned proxy credentials (account: ${autoCreds.user})`);
+        }
+      } catch {
+        // Non-fatal: proxy tools will show a configuration error when invoked
+      }
+    }
+
+    checkProxyConfiguration();
     const filterInfo = process.env.NOVADA_TOOLS || process.env.NOVADA_GROUPS
       ? ` (TOOLS=${process.env.NOVADA_TOOLS ?? ""} GROUPS=${process.env.NOVADA_GROUPS ?? ""})`
       : "";
@@ -911,11 +943,13 @@ Usage:
   npx novada --list-tools Show available tools
   npx novada --help       Show this help
 
-Environment:
-  NOVADA_API_KEY              Your Novada API key (required)
-  NOVADA_WEB_UNBLOCKER_KEY    Web Unblocker key (enables JS rendering)
-  NOVADA_BROWSER_WS           Browser API WebSocket (enables browser automation)
-  NOVADA_PROXY_USER/PASS/ENDPOINT  Proxy credentials (enables novada_proxy)
+Environment (ONE KEY COVERS EVERYTHING):
+  NOVADA_API_KEY              Your Novada API key — authenticates ALL products (required)
+                              Covers: search, extract, research, crawl, scrape, unblock, proxy auto-provision
+  NOVADA_BROWSER_WS           Browser API WebSocket — same account, separate endpoint (optional)
+  NOVADA_PROXY_ENDPOINT       Proxy gateway host:port — user/pass auto-fetched from your account (optional)
+  NOVADA_WEB_UNBLOCKER_KEY    Override unblocker key (optional — NOVADA_API_KEY is used as fallback)
+  NOVADA_PROXY_USER/PASS      Override proxy credentials (optional — auto-provisioned if PROXY_ENDPOINT set)
 
 Connect to Claude Code:
   claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada

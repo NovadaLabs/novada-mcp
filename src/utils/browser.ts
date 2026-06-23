@@ -95,7 +95,7 @@ export function isBrowserConfigured(): boolean {
  */
 export async function fetchViaBrowser(
   url: string,
-  options: { timeout?: number; waitForSelector?: string; sessionId?: string } = {}
+  options: { timeout?: number; waitForSelector?: string; sessionId?: string; wait_ms?: number } = {}
 ): Promise<string> {
   const wsEndpoint = getBrowserWs();
   if (!wsEndpoint) {
@@ -112,7 +112,10 @@ export async function fetchViaBrowser(
     if (existingPage) {
       await existingPage.goto(url, { waitUntil: "domcontentloaded", timeout });
       if (options.waitForSelector) {
-        await existingPage.waitForSelector(options.waitForSelector, { timeout: 5000 }).catch(() => {});
+        await existingPage.waitForSelector(options.waitForSelector, { timeout: 15000 }).catch(() => {});
+      }
+      if (options.wait_ms !== undefined && options.wait_ms >= 0) {
+        await existingPage.waitForTimeout(options.wait_ms);
       }
       return existingPage.content();
     }
@@ -149,9 +152,13 @@ export async function fetchViaBrowser(
     });
 
     if (options.waitForSelector) {
-      await page.waitForSelector(options.waitForSelector, { timeout: 5000 }).catch(() => {
+      await page.waitForSelector(options.waitForSelector, { timeout: 15000 }).catch(() => {
         // Best effort — don't fail if selector not found
       });
+    }
+
+    if (options.wait_ms !== undefined && options.wait_ms >= 0) {
+      await page.waitForTimeout(options.wait_ms);
     }
 
     const html = await page.content();

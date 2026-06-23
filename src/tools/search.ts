@@ -1,10 +1,13 @@
 import axios, { AxiosError } from "axios";
 import * as cheerio from "cheerio";
+import https from "https";
 import { USER_AGENT, cleanParams, rerankResults } from "../utils/index.js";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+
+const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
 
 const SCRAPER_SEARCH_ENGINES = new Set(["google", "bing", "duckduckgo", "yandex"]);
 
@@ -76,6 +79,7 @@ async function submitBingSearch(apiKey: string, query: string): Promise<NovadaSe
         "Content-Type": "application/x-www-form-urlencoded",
       },
       timeout: 60000,
+      httpsAgent: keepAliveAgent,
     });
 
     const body = resp.data as { code: number; msg?: string; data: unknown };
@@ -145,6 +149,7 @@ export async function submitSearchScrapeTask(
       "Content-Type": "application/x-www-form-urlencoded",
     },
     timeout: 60000,
+    httpsAgent: keepAliveAgent,
   });
 
   const body = resp.data as { code: number; msg?: string; data: unknown };
@@ -167,15 +172,17 @@ export async function submitSearchScrapeTask(
 export async function pollSearchResult(apiKey: string, taskId: string): Promise<Record<string, unknown>> {
   const url = `${SCRAPER_DOWNLOAD_BASE}/scraper_download?task_id=${encodeURIComponent(taskId)}&file_type=json&apikey=${encodeURIComponent(apiKey)}`;
   const deadline = Date.now() + 90_000;
+  let pollAttempt = 0;
 
   while (Date.now() < deadline) {
-    const resp = await axios.get(url, { timeout: 30000 });
+    const resp = await axios.get(url, { timeout: 30000, httpsAgent: keepAliveAgent });
     const body = resp.data;
 
     // Pending
     if (body !== null && typeof body === "object" && !Array.isArray(body) &&
         (body as Record<string, unknown>).code === 27202) {
-      await scraperSleep(2000);
+      await scraperSleep(Math.min(100 * Math.pow(2, pollAttempt), 2000));
+      pollAttempt++;
       continue;
     }
 
@@ -201,7 +208,8 @@ export async function pollSearchResult(apiKey: string, taskId: string): Promise<
       }
       // Still pending
       if (bObj.code === 27202) {
-        await scraperSleep(2000);
+        await scraperSleep(Math.min(100 * Math.pow(2, pollAttempt), 2000));
+        pollAttempt++;
         continue;
       }
       throw new Error(`Scraper download error (code ${bObj.code ?? "?"}): ${bObj.msg ?? JSON.stringify(bObj).slice(0, 150)}`);
@@ -460,16 +468,18 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
 
     // Strip pagination UI text from snippets
     const rawSnippet = r.description || r.snippet || "";
-    const cleanSnippet = rawSnippet
+    const fullSnippet = rawSnippet
       .replace(/\.{3}\s*Read\s+more\s*$/i, "...")
       .replace(/\s+Read\s+more\s*$/i, "")
       .replace(/\s+More\s*$/i, "")
-      .trim() || "No description";
+      .trim();
+    const cleanSnippet = fullSnippet.length > 400
+      ? fullSnippet.slice(0, 397) + "..."
+      : fullSnippet || "No description";
 
-    lines.push(`### ${i + 1}. ${r.title || "Untitled"}`);
-    lines.push(`url: ${url}`);
-    lines.push(`snippet: ${cleanSnippet}`);
+    lines.push(`## ${i + 1}. [${r.title || "Untitled"}](${url})`);
     if (r.published || r.date) lines.push(`published: ${r.published || r.date}`);
+    lines.push(cleanSnippet);
     const rExt = r as NovadaSearchResult & { extracted_content?: string | null; extract_error?: string };
     if (rExt.extracted_content != null) {
       lines.push(`extracted_content:`);

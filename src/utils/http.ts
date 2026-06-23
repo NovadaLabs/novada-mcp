@@ -1,6 +1,15 @@
+import https from "https";
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
 import { WEB_UNBLOCKER_BASE, JS_DETECTION_THRESHOLD, TIMEOUTS } from "../config.js";
-import { getProxyCredentials, getWebUnblockerKey } from "./credentials.js";
+import { getProxyCredentials, getResidentialProxyCredentials, getWebUnblockerKey } from "./credentials.js";
+
+const SSL_ERROR_CODES = new Set([
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "CERT_HAS_EXPIRED",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "ERR_TLS_CERT_ALTNAME_INVALID",
+]);
 
 export const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
@@ -18,7 +27,7 @@ export async function fetchWithRetry(
     try {
       return await axios.get(url, {
         headers: { "User-Agent": USER_AGENT },
-        timeout: 30000,
+        timeout: TIMEOUTS.STATIC_FETCH,
         maxRedirects: 5,
         maxContentLength: 10 * 1024 * 1024, // 10MB cap — prevents OOM on huge pages
         maxBodyLength: 10 * 1024 * 1024,
@@ -31,6 +40,13 @@ export async function fetchWithRetry(
           `Response from ${url} exceeds the 10MB content limit. This is usually a binary file, a very large page, or a misconfigured server. ` +
           "Try a more specific subpage URL, or use novada_map to find the exact page you need."
         );
+      }
+      // SSL error: retry once ignoring certificate validation — common for small Chinese sites with expired/self-signed certs
+      if (error instanceof AxiosError && SSL_ERROR_CODES.has((error.cause as NodeJS.ErrnoException)?.code ?? error.code ?? "")) {
+        return await axios.get(url, {
+          ...options,
+          httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+        });
       }
       if (attempt === retries) throw error;
       const isRetryable =
@@ -56,8 +72,8 @@ export async function fetchWithRetry(
  */
 // Session-level circuit breaker: skip proxy once we know it's unavailable this session.
 // Auto-resets after PROXY_CIRCUIT_RESET_MS to recover from transient failures.
-// Keyed by proxy endpoint so multiple SDK clients with different proxy credentials
-// do not interfere with each other's circuit state.
+// Keyed by "${tier}:${endpoint}" so residential and datacenter tiers maintain independent
+// circuit states even when they share the same endpoint (residential fallback scenario).
 interface CircuitState {
   available: boolean | null;
   disabledAt: number | null;
@@ -65,11 +81,12 @@ interface CircuitState {
 const proxyCircuits = new Map<string, CircuitState>();
 const PROXY_CIRCUIT_RESET_MS = 5 * 60 * 1000; // 5 minutes
 
-function getCircuit(endpoint: string): CircuitState {
-  let state = proxyCircuits.get(endpoint);
+function getCircuit(tier: string, endpoint: string): CircuitState {
+  const key = `${tier}:${endpoint}`;
+  let state = proxyCircuits.get(key);
   if (!state) {
     state = { available: null, disabledAt: null };
-    proxyCircuits.set(endpoint, state);
+    proxyCircuits.set(key, state);
   }
   return state;
 }
@@ -77,16 +94,33 @@ function getCircuit(endpoint: string): CircuitState {
 export async function fetchViaProxy(
   url: string,
   _apiKey: string | undefined,
-  options: Partial<AxiosRequestConfig> = {}
+  options: Partial<AxiosRequestConfig> & { proxyTier?: "residential" | "datacenter" } = {}
 ): Promise<AxiosResponse> {
-  // Credentials: SDK-scoped (via AsyncLocalStorage) > NOVADA_PROXY_* env vars
-  const proxyCreds = getProxyCredentials();
+  const { proxyTier, ...axiosOptions } = options;
+  // Credentials: use residential creds if proxyTier === "residential", else standard proxy creds
+  let effectiveTier = proxyTier ?? "datacenter";
+  const proxyCreds = proxyTier === "residential"
+    ? (() => {
+        const residentialSpecific = process.env.NOVADA_RESIDENTIAL_PROXY_USER &&
+          process.env.NOVADA_RESIDENTIAL_PROXY_PASS &&
+          process.env.NOVADA_RESIDENTIAL_PROXY_ENDPOINT;
+        if (!residentialSpecific) {
+          console.warn(
+            "[novada-mcp] NOVADA_RESIDENTIAL_PROXY_* env vars not set — " +
+            "falling back to datacenter proxy credentials for residential tier. " +
+            "Set NOVADA_RESIDENTIAL_PROXY_USER/PASS/ENDPOINT to use dedicated residential proxies."
+          );
+          effectiveTier = "datacenter";
+        }
+        return getResidentialProxyCredentials();
+      })()
+    : getProxyCredentials();
   const proxyUser = proxyCreds?.user;
   const proxyPass = proxyCreds?.pass;
   const proxyEndpoint = proxyCreds?.endpoint;
 
   if (proxyUser && proxyPass && proxyEndpoint) {
-    const circuit = getCircuit(proxyEndpoint);
+    const circuit = getCircuit(effectiveTier, proxyEndpoint);
 
     // Auto-reset circuit breaker after TTL (recovers from transient failures)
     if (circuit.available === false && circuit.disabledAt !== null && Date.now() - circuit.disabledAt > PROXY_CIRCUIT_RESET_MS) {
@@ -95,7 +129,7 @@ export async function fetchViaProxy(
     }
 
     if (circuit.available === false) {
-      return fetchWithRetry(url, options);
+      return fetchWithRetry(url, axiosOptions);
     }
 
     const [proxyHost, proxyPortStr] = proxyEndpoint.split(":");
@@ -109,13 +143,13 @@ export async function fetchViaProxy(
 
     if (circuit.available === true) {
       // Known-good: use proxy directly
-      return fetchWithRetry(url, { headers: { "User-Agent": USER_AGENT }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...options });
+      return fetchWithRetry(url, { headers: { "User-Agent": USER_AGENT }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...axiosOptions });
     }
 
     // Unknown state: race proxy vs direct fetch — take the first successful response.
     // Probe proxy with 0 retries: a single failure is enough to mark circuit open and
     // fall back to direct without burning 3 retries × exponential backoff (~7s).
-    const proxyProbeOptions = { headers: { "User-Agent": USER_AGENT }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...options };
+    const proxyProbeOptions = { headers: { "User-Agent": USER_AGENT }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...axiosOptions };
     const proxyFetch: Promise<AxiosResponse | null> = fetchWithRetry(url, proxyProbeOptions, 0)
       .then(r => { circuit.available = true; return r; })
       .catch((error: unknown) => {
@@ -137,7 +171,7 @@ export async function fetchViaProxy(
         return null; // signal: proxy unavailable, caller will use directFetch result
       });
 
-    const directFetch = fetchWithRetry(url, options).catch((err: unknown) => {
+    const directFetch = fetchWithRetry(url, axiosOptions).catch((err: unknown) => {
       throw Object.assign(
         new Error(`Direct fetch failed: ${err instanceof Error ? err.message : String(err)}. Proxy circuit: ${circuit.available === false ? "open (disabled)" : "unknown"}`),
         { cause: err }
@@ -159,7 +193,7 @@ export async function fetchViaProxy(
     });
     return result as AxiosResponse;
   }
-  return fetchWithRetry(url, options);
+  return fetchWithRetry(url, axiosOptions);
 }
 
 /**
@@ -170,10 +204,10 @@ export async function fetchViaProxy(
 export async function fetchWithRender(
   url: string,
   scraperApiKey: string | undefined,
-  options: Partial<AxiosRequestConfig> & { country?: string } = {}
+  options: Partial<AxiosRequestConfig> & { country?: string; proxyTier?: "residential" | "datacenter" } = {}
 ): Promise<AxiosResponse> {
   const unblockerKey = getWebUnblockerKey();
-  const { country, ...axiosOptions } = options;
+  const { country, proxyTier, ...axiosOptions } = options;
 
   if (unblockerKey) {
     // Web Unblocker API is intermittently flaky — inner data.code returns 403/502
@@ -238,7 +272,7 @@ export async function fetchWithRender(
   }
 
   // Fallback: no unblocker key configured — use proxy/direct fetch (best effort)
-  return fetchViaProxy(url, scraperApiKey, axiosOptions);
+  return fetchViaProxy(url, scraperApiKey, { ...axiosOptions, ...(proxyTier ? { proxyTier } : {}) });
 }
 
 /** Detect if fetched HTML is a JS-required page (empty shell, Cloudflare, etc.) */
@@ -309,6 +343,13 @@ export function detectBotChallenge(html: string): boolean {
     "please wait while we verify",
     "human verification",
     "human-challenge",
+    // DataDome challenge page markers (not just the cookie name)
+    "robot check",
+    "enter the characters you see below",
+    "sorry, we just need to make sure",
+    // Amazon WAF
+    "to discuss automated access to amazon data",
+    "apologies, but we're having trouble saving your cookie",
   ];
 
   for (const signal of knownChallengeStrings) {

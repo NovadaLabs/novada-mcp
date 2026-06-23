@@ -57,6 +57,7 @@ export async function routeFetch(
     apiKey?: string;
     timeout?: number;
     waitForSelector?: string;
+    wait_ms?: number;
     country?: string;
   } = {}
 ): Promise<RouteResult> {
@@ -66,7 +67,7 @@ export async function routeFetch(
 
   // Force browser mode
   if (renderMode === "browser") {
-    const html = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector });
+    const html = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector, wait_ms: options.wait_ms });
     return { html, mode: "browser", cost: "high" };
   }
 
@@ -154,7 +155,7 @@ export async function routeFetch(
     if (detectBotChallenge(renderHtml)) {
       if (isBrowserConfigured()) {
         try {
-          const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector });
+          const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector, wait_ms: options.wait_ms });
           return { html: browserHtml, mode: "browser", cost: "high" };
         } catch {
           // Browser unavailable — fall through to render-failed
@@ -169,7 +170,7 @@ export async function routeFetch(
     // Render also JS-heavy — try browser if configured
     if (isBrowserConfigured()) {
       try {
-        const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector });
+        const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector, wait_ms: options.wait_ms });
         return { html: browserHtml, mode: "browser", cost: "high" };
       } catch {
         // Browser unavailable — fall through to render result
@@ -182,7 +183,7 @@ export async function routeFetch(
     // Render failed — try browser as last resort
     if (isBrowserConfigured()) {
       try {
-        const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector });
+        const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector, wait_ms: options.wait_ms });
         return { html: browserHtml, mode: "browser", cost: "high" };
       } catch {
         // Browser also unavailable — fall back to static
