@@ -2,8 +2,10 @@ import axios, { AxiosError } from "axios";
 import { z } from "zod";
 import { SCRAPER_DOWNLOAD_BASE } from "../config.js";
 import { formatAsMarkdown } from "../utils/format.js";
+import { saveOutput } from "../utils/output.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 import { TASK_ID_REGEX, TASK_ID_REGEX_MSG } from "./types.js";
+import { devApiPost } from "../_core/developer_api.js";
 
 // ─── Schema & Types ──────────────────────────────────────────────────────────
 
@@ -33,8 +35,7 @@ export function validateScraperResultParams(
 
 // ─── Result Endpoint ─────────────────────────────────────────────────────────
 
-// Result download: GET /scraper_download?task_id=...&file_type=json&apikey=...
-// Auth: apikey query param (NOT Bearer). api-m.novada.com always 404s — no fallback.
+// Kept for legacy fallback path only
 const RESULT_DOWNLOAD_ENDPOINT = `${SCRAPER_DOWNLOAD_BASE}/scraper_download`;
 
 /** Flatten a potentially nested object for tabular display.
@@ -112,57 +113,46 @@ export async function novadaScraperResult(
   let rawData: unknown = null;
   let fetchedFromEndpoint = "unknown";
 
-  // ── Download endpoint: GET /scraper_download?task_id=...&file_type=json&apikey=... ──
-  // Auth: apikey query param (NOT Bearer token — different from scraper.novada.com).
-  // api-m.novada.com is a dead endpoint (always 404s) — no fallback attempted.
+  // ── 2-step COS download ──
+  // Step 1: POST /v1/scraper/task_download → get pre-signed COS URL
+  // Step 2: GET the COS URL (no auth needed — it's pre-signed)
   try {
-    const resp = await axios.get(RESULT_DOWNLOAD_ENDPOINT, {
-      params: { task_id, file_type: "json", apikey: apiKey },
-      timeout: 30000,
-    });
-    const body = resp.data;
+    // Per API docs: response is data: [{ download: "https://...cos...", task_id: "..." }]
+    interface TaskDownloadEntry {
+      download?: string;
+      task_id?: string;
+    }
+    type TaskDownloadResponse = TaskDownloadEntry | TaskDownloadEntry[];
 
-    if (Array.isArray(body) && body.length > 0) {
-      rawData = body;
-      fetchedFromEndpoint = RESULT_DOWNLOAD_ENDPOINT;
-    } else if (
-      body !== null &&
-      typeof body === "object" &&
-      !Array.isArray(body)
-    ) {
-      const bObj = body as Record<string, unknown>;
-      // Direct result object — Google SERP format (organic/search_metadata at top level)
-      if ("organic_results" in bObj || "organic" in bObj || "search_metadata" in bObj) {
-        rawData = body;
-        fetchedFromEndpoint = RESULT_DOWNLOAD_ENDPOINT;
-      }
-      // Task still pending — don't fall through to dead api-m endpoint
-      if (bObj.code === 27202) {
-        return JSON.stringify(
-          {
-            status: "not_ready",
-            task_id,
-            agent_instruction:
-              "Task is not yet complete. Use novada_scraper_status to poll until status is 'complete', then call novada_scraper_result again.",
-          },
-          null,
-          2
-        );
-      }
-      // Error codes from download endpoint
-      if (bObj.code === 10002 || bObj.code === 10003) {
-        return JSON.stringify(
-          {
-            status: "failed",
-            task_id,
-            error: `Task failed (code ${bObj.code}): ${bObj.msg ?? "Server-side task execution error."}`,
-            agent_instruction:
-              "The scraping task failed. Re-submit with novada_scraper_submit or try novada_extract as an alternative.",
-          },
-          null,
-          2
-        );
-      }
+    const downloadResp = await devApiPost<TaskDownloadResponse>(
+      "/v1/scraper/task_download",
+      { task_ids: task_id, file_type: "json" },
+      { apiKey }
+    );
+
+    // Extract download URL: API returns array of { download, task_id }
+    const downloadUrl =
+      Array.isArray(downloadResp)
+        ? downloadResp[0]?.download
+        : (downloadResp as TaskDownloadEntry)?.download;
+
+    if (downloadUrl) {
+      // Step 2: fetch the actual data from the pre-signed COS URL (no auth needed)
+      const dataResp = await axios.get(downloadUrl, { timeout: 30000 });
+      rawData = dataResp.data;
+      fetchedFromEndpoint = "task_download";
+    } else {
+      // No COS URL returned — task may not be ready yet
+      return JSON.stringify(
+        {
+          status: "not_ready",
+          task_id,
+          agent_instruction:
+            "Task is not yet complete. Use novada_scraper_status to poll until status is 'complete', then call novada_scraper_result again.",
+        },
+        null,
+        2
+      );
     }
   } catch (downloadErr: unknown) {
     if (downloadErr instanceof AxiosError) {
@@ -173,16 +163,74 @@ export async function novadaScraperResult(
           "Invalid NOVADA_API_KEY or insufficient permissions for Scraper API."
         );
       }
-      throw makeNovadaError(
-        NovadaErrorCode.API_DOWN,
-        `Download endpoint error (HTTP ${status ?? "network"}): ${downloadErr.message}`
-      );
+      // COS URL fetch failed — try legacy download endpoint as fallback
     } else {
-      // Non-Axios error (e.g. network failure) — re-throw via error system
-      throw makeNovadaError(
-        NovadaErrorCode.API_DOWN,
-        downloadErr instanceof Error ? downloadErr.message : String(downloadErr)
-      );
+      // NovadaError from devApiPost (e.g. task not ready, code 27202)
+      // Fall through to legacy fallback
+    }
+
+    // Legacy fallback: GET /scraper_download?task_id=...&file_type=json&apikey=...
+    try {
+      const resp = await axios.get(RESULT_DOWNLOAD_ENDPOINT, {
+        params: { task_id, file_type: "json", apikey: apiKey },
+        timeout: 30000,
+      });
+      const body = resp.data;
+
+      if (Array.isArray(body) && body.length > 0) {
+        rawData = body;
+        fetchedFromEndpoint = RESULT_DOWNLOAD_ENDPOINT;
+      } else if (body !== null && typeof body === "object" && !Array.isArray(body)) {
+        const bObj = body as Record<string, unknown>;
+        if ("organic_results" in bObj || "organic" in bObj || "search_metadata" in bObj) {
+          rawData = body;
+          fetchedFromEndpoint = RESULT_DOWNLOAD_ENDPOINT;
+        }
+        if (bObj.code === 27202) {
+          return JSON.stringify(
+            {
+              status: "not_ready",
+              task_id,
+              agent_instruction:
+                "Task is not yet complete. Use novada_scraper_status to poll until status is 'complete', then call novada_scraper_result again.",
+            },
+            null,
+            2
+          );
+        }
+        if (bObj.code === 10002 || bObj.code === 10003) {
+          return JSON.stringify(
+            {
+              status: "failed",
+              task_id,
+              error: `Task failed (code ${bObj.code}): ${bObj.msg ?? "Server-side task execution error."}`,
+              agent_instruction:
+                "The scraping task failed. Re-submit with novada_scraper_submit or try novada_extract as an alternative.",
+            },
+            null,
+            2
+          );
+        }
+      }
+    } catch (legacyErr: unknown) {
+      if (legacyErr instanceof AxiosError) {
+        const status = legacyErr.response?.status;
+        if (status === 401 || status === 403) {
+          throw makeNovadaError(
+            NovadaErrorCode.INVALID_API_KEY,
+            "Invalid NOVADA_API_KEY or insufficient permissions for Scraper API."
+          );
+        }
+        throw makeNovadaError(
+          NovadaErrorCode.API_DOWN,
+          `Download endpoint error (HTTP ${status ?? "network"}): ${legacyErr.message}`
+        );
+      } else {
+        throw makeNovadaError(
+          NovadaErrorCode.API_DOWN,
+          legacyErr instanceof Error ? legacyErr.message : String(legacyErr)
+        );
+      }
     }
   }
 
@@ -217,9 +265,23 @@ export async function novadaScraperResult(
     );
   }
 
+  // Wire output save — best-effort, never breaks the tool
+  let savedInfo = "";
+  try {
+    const outputResult = await saveOutput({
+      tool: "scraper",
+      hint: task_id.slice(0, 12),
+      format: format === "json" ? "json" : "csv",
+      data: records,
+      cosUrl: undefined, // COS URL not captured in current flow; will surface when task_download returns it
+    });
+    savedInfo = outputResult.summary;
+  } catch { /* file save is best-effort */ }
+
+  let output: string;
   switch (format) {
     case "json":
-      return [
+      output = [
         "## Scraper Result",
         `task_id: ${task_id} | records: ${records.length} | fetched from: ${fetchedFromEndpoint}`,
         "",
@@ -233,9 +295,10 @@ export async function novadaScraperResult(
         "- Use format='raw' to see the unprocessed API response.",
         `- task_id: ${task_id}`,
       ].join("\n");
+      break;
 
     case "raw":
-      return [
+      output = [
         "## Scraper Result (Raw)",
         `task_id: ${task_id} | fetched from: ${fetchedFromEndpoint}`,
         "",
@@ -248,11 +311,12 @@ export async function novadaScraperResult(
         "- Use format='json' for extracted records array.",
         "- Use format='markdown' for a formatted table.",
       ].join("\n");
+      break;
 
     case "markdown":
     default: {
       const flatRecords = records.map((r) => flattenRecord(r)) as Record<string, unknown>[];
-      return [
+      output = [
         "## Scraper Result",
         `task_id: ${task_id} | records: ${records.length}`,
         "",
@@ -266,6 +330,13 @@ export async function novadaScraperResult(
         `- Use novada_scraper_status with task_id="${task_id}" to check if this was the full result.`,
         `- task_id: ${task_id}`,
       ].join("\n");
+      break;
     }
   }
+
+  if (savedInfo) {
+    output += `\n\n## Output Saved\n${savedInfo}`;
+  }
+
+  return output;
 }

@@ -46,7 +46,7 @@ export function validateCaptureLogsParams(
  */
 export async function novadaCaptureLogs(
   params: CaptureLogsParams,
-  _apiKey?: string,
+  apiKey?: string,
 ): Promise<string> {
   const baseBody: Record<string, unknown> = {
     page: params.page,
@@ -61,7 +61,7 @@ export async function novadaCaptureLogs(
       ? withDateRangeCompat(baseBody, { start: params.start_time, end: params.end_time })
       : baseBody;
 
-  const data = await devApiPost<unknown>("/v1/capture/logs", body);
+  const data = await devApiPost<unknown>("/v1/capture/logs", body, { apiKey });
 
   return JSON.stringify(
     {

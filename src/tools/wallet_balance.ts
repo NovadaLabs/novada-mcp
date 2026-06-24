@@ -21,10 +21,10 @@ export function validateWalletBalanceParams(
  */
 export async function novadaWalletBalance(
   _params: WalletBalanceParams,
-  _apiKey?: string
+  apiKey?: string
 ): Promise<string> {
   const body: Record<string, unknown> = {};
-  const data = await devApiPost("/v1/wallet/balance", body);
+  const data = await devApiPost("/v1/wallet/balance", body, { apiKey });
 
   return JSON.stringify(
     {

@@ -48,6 +48,9 @@ export const TIMEOUTS = {
   CRAWL_STATIC: 15000,
   CRAWL_RENDER: 60000,
   TOTAL_REQUEST_CEILING: 90000, // hard per-URL ceiling enforced in extractSingle via Promise.race
+  SEARCH_SUBMIT_TIMEOUT: 30_000,
+  SEARCH_POLL_TIMEOUT: 60_000,
+  SEARCH_TOTAL_CEILING: 90_000,
 } as const;
 
 // Excel max sheet name length

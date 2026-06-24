@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Novada Developer API — Full Reference</title>
+<style>
+:root {
+  --bg: #f8f9fa; --sidebar: #1a1a2e; --accent: #6c63ff;
+  --text: #1a1a2e; --code-bg: #f0f0f0; --border: #e0e0e0;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); display: flex; }
+#toc {
+  width: 260px; min-height: 100vh; background: var(--sidebar); color: #ccc;
+  padding: 24px 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto; flex-shrink: 0;
+}
+#toc h2 { color: white; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+#toc ul { list-style: none; padding: 0; }
+#toc > ul > li { margin-bottom: 12px; }
+#toc > ul > li > strong { display: block; color: #fff; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; padding: 2px 0; border-bottom: 1px solid #333; }
+#toc ul ul { margin-left: 8px; }
+#toc ul ul li a { display: block; color: #aaa; text-decoration: none; font-size: 13px; padding: 3px 4px; border-radius: 3px; }
+#toc ul ul li a:hover { color: white; background: rgba(255,255,255,0.1); }
+#content { flex: 1; padding: 32px; max-width: 900px; }
+.group { margin-bottom: 48px; }
+.group-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); border-bottom: 2px solid var(--accent); padding-bottom: 8px; margin-bottom: 24px; }
+article { margin-bottom: 40px; padding-bottom: 40px; border-bottom: 1px solid var(--border); }
+.page-title { font-size: 22px; color: var(--text); margin-bottom: 16px; }
+h1:not(.group-title):not(.page-title) { font-size: 20px; margin: 24px 0 12px; }
+h2:not(.group-title):not(.page-title) { font-size: 16px; margin: 20px 0 10px; color: #333; }
+h3 { font-size: 14px; margin: 16px 0 8px; color: #444; }
+p { line-height: 1.7; margin-bottom: 12px; color: #333; }
+pre { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 6px; overflow-x: auto; margin: 12px 0; font-size: 13px; line-height: 1.5; }
+code { font-family: "SF Mono", "Fira Code", monospace; font-size: 12px; }
+p code, li code { background: var(--code-bg); padding: 2px 5px; border-radius: 3px; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+td, th { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+tr:nth-child(even) { background: #f5f5f5; }
+strong { color: #1a1a2e; }
+details { margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; padding: 0; }
+summary { padding: 10px 14px; cursor: pointer; font-weight: 600; }
+details[open] summary { border-bottom: 1px solid var(--border); }
+details > :not(summary) { padding: 12px 14px; }
+</style>
+</head>
+<body>
+<nav id="toc"><h2>Contents</h2><ul><li><strong>Getting Started</strong><ul><li><a href="#01_overview">Overview</a></li><li><a href="#02_quickstart">Quick Start</a></li><li><a href="#03_authentication">Authentication</a></li></ul></li><li><strong>Proxy APIs</strong><ul><li><a href="#04_user">User / Proxy Account Mgmt</a></li><li><a href="#05_whitelist">IP Whitelist</a></li><li><a href="#06_residential">Residential Proxies</a></li><li><a href="#07_mobile">Mobile Proxies</a></li><li><a href="#08_rotating_isp">Rotating ISP Proxies</a></li><li><a href="#09_rotating_dc">Rotating Datacenter Proxies</a></li><li><a href="#10_static_isp">Static ISP Proxies</a></li><li><a href="#11_dedicated_dc">Dedicated Datacenter Proxies</a></li></ul></li><li><strong>Scraping Solutions</strong><ul><li><a href="#12_universal">Universal Scraper</a></li><li><a href="#13_web_unblocker">Web Unblocker</a></li><li><a href="#14_scraper_api">Scraper API</a></li><li><a href="#15_browser_api">Browser API</a></li></ul></li><li><strong>Resource Management</strong><ul><li><a href="#16_wallet">Wallet</a></li><li><a href="#17_prohibit_domain">Prohibit Domain</a></li></ul></li><li><strong>Reference</strong><ul><li><a href="#18_error_codes">Error Codes</a></li></ul></li></ul></nav>
+<div id="content">
+<div style="background:#6c63ff;color:white;padding:24px 32px;border-radius:12px;margin-bottom:32px;">
+  <h1 style="font-size:28px;font-weight:700;margin-bottom:8px;">Novada Developer API</h1>
+  <p style="opacity:0.9;font-size:15px;">Full reference — 18 pages · Base: <code style="background:rgba(255,255,255,0.2);padding:2px 6px;border-radius:3px;">api-m.novada.com</code> · Auth: <code style="background:rgba(255,255,255,0.2);padding:2px 6px;border-radius:3px;">Authorization: Bearer YOUR_API_KEY</code></p>
+  <p style="opacity:0.8;font-size:13px;margin-top:8px;">⚡ ONE API KEY covers all products: Search · Extract · Scraper API · Web Unblocker · Proxy Management · Browser API HTTP endpoints<br>⚠️ Proxy dialing + Browser API WSS use <code style="background:rgba(255,255,255,0.2);padding:1px 4px;">username:password</code> credentials</p>
+</div>
+<section class="group"><h1 class="group-title">Getting Started</h1><article id="01_overview"><h2 class="page-title">Overview</h2><h1>Overview</h1>
+<h3>Novada Public API</h3>
+<p>Manage proxies through a consistent interface, scraping, and browser automation. This reference covers authentication, request structure, error handling, and field definitions with examples across all products.</p>
+<h3>Authentication</h3>
+<p>All endpoints in this reference use an <strong>API Key</strong> as a Bearer. Add the following header to every HTTP request:</p>
+<pre><code class="lang-http">Authorization: Bearer YOUR_API_KEY
+</code></pre>
+<p>Create an API Key in [<strong>Dashboard › Account Settings › My account › API Key</strong>](https://dashboard.novada.com/api-key/). See [Authentication ↗](/getting-started/authentication.md) for the full guide.</p>
+<h3>Product Matrix</h3>
+<p>This reference covers the API specifications for all Novada products. Billing is settled independently per product.</p>
+<h3>Request Basics</h3>
+<table><thead><tr><th width="180">Item</th><th>Description</th></tr></thead><tbody><tr><td>Base Domains</td><td><code>api-m.novada.com</code> — most management endpoints<br><code>scraper.novada.com</code> — Scraper API task creation<br><code>webunlocker.novada.com</code> — Web Unblocker</td></tr><tr><td>Protocol</td><td>HTTPS (both HTTP/1.1 and HTTP/2 supported)</td></tr><tr><td>Default Content-Type</td><td><code>application/json</code> (some endpoints use <code>application/x-www-form-urlencoded</code>; see individual endpoint pages)</td></tr><tr><td>Character Encoding</td><td>UTF-8</td></tr><tr><td>Version Prefix</td><td><code>/v1/</code></td></tr></tbody></table>
+<h3>Response Structure</h3>
+<p>All API Key endpoints return a <strong>unified response envelope</strong>:</p>
+<p>See  [Error Codes ↗](broken://pages/e5a3d76088b2a0ea19a5efca0667e617069099f5) for <code>code</code> values returned on error.</p>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/getting-started/overview.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article><article id="02_quickstart"><h2 class="page-title">Quick Start</h2><h1>Quick Start</h1>
+<p>Send your first request in three steps: get your Key → add the Authorization header → call the API.</p>
+<h3>Three Steps to Get Started</h3>
+<h3>Sign up for Novada and get your API Key</h3>
+<p>Go to [<strong>Dashboard › Account Settings › My account › API Key</strong>](https://dashboard.novada.com/api-key/) to create an API Key. Each account can create up to 10 keys, individually enabled or disabled, with a maximum validity of 5 years — <strong>and the option to never expire</strong>.</p>
+<h3>Add Authorization to your HTTP request header</h3>
+<pre><code class="lang-http">Authorization: Bearer YOUR_API_KEY
+</code></pre>
+<p>All API Key based products share the same API Key — no need to use different keys for different products. <strong>One Key, Everywhere.</strong></p>
+<h3>Make your first call</h3>
+<p>The examples below switch by language. Call <code>GET /v1/wallet/balance</code> to query your account balance — a response with <code>code: 0</code> indicates success.</p>
+<h3>Example: Query Account Balance</h3>
+<code>GET https://api-m.novada.com/v1/wallet/balance</code>
+<pre><code class="lang-bash">curl -X GET https://api-m.novada.com/v1/wallet/balance \
+  -H "Authorization: Bearer YOUR_API_KEY"
+</code></pre>
+<pre><code class="lang-python">import requests
+<p>resp = requests.get(<br>    "https://api-m.novada.com/v1/wallet/balance",<br>    headers={"Authorization": "Bearer YOUR_API_KEY"},<br>)<br>print(resp.json())<br></code></pre></p>
+<pre><code class="lang-javascript">const res = await fetch("https://api-m.novada.com/v1/wallet/balance", {
+  headers: { Authorization: "Bearer YOUR_API_KEY" },
+});
+console.log(await res.json());
+</code></pre>
+<pre><code class="lang-go">req, _ := http.NewRequest("GET",
+  "https://api-m.novada.com/v1/wallet/balance", nil)
+req.Header.Set("Authorization", "Bearer YOUR_API_KEY")
+<p>resp, _ := http.DefaultClient.Do(req)<br>defer resp.Body.Close()<br></code></pre></p>
+<pre><code class="lang-php">$ch = curl_init("https://api-m.novada.com/v1/wallet/balance");
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    "Authorization: Bearer YOUR_API_KEY",
+]);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+$response = curl_exec($ch);
+curl_close($ch);
+</code></pre>
+<strong>Successful response:</strong>
+<h3>Credential Modes</h3>
+<p>Novada uses <strong>direct API Key authentication</strong> as the primary path — simply add <code>Authorization: Bearer YOUR_API_KEY</code> to your HTTP header and you're ready to call. No token expiration, no pre-exchange required.</p>
+<details>
+<summary>Backwards Compatible: Token Exchange Mode (no migration needed for existing users)</summary>
+<p>The original Token Exchange mode remains supported for backwards compatibility: call <code>/v1/oauth2/token</code> to exchange for an <code>access_token</code> (7-day TTL), then use the token to call business endpoints. <strong>No code changes required for existing integrations</strong>, but new projects are recommended to use direct API Key authentication.</p>
+<pre><code class="lang-bash">&lt;h1&gt;Method A (recommended): Exchange token using API Key as Bearer&lt;/h1&gt;
+curl -X POST https://api-m.novada.com/v1/oauth2/token \
+  -H "Authorization: Bearer YOUR_API_KEY"
+<p>&lt;h1&gt;Method B (compatible): Legacy Basic Auth (username:api_key) still works&lt;/h1&gt;<br>curl -X POST https://api-m.novada.com/v1/oauth2/token \<br>  -u "your_username:your_api_key"<br></code></pre></p>
+</details>
+<p>For full details on credential management and FAQs, see [Authentication ↗](/getting-started/authentication.md).</p>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/getting-started/quick-start.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article><article id="03_authentication"><h2 class="page-title">Authentication</h2><h1>Authentication</h1>
+<h3>Credential Modes</h3>
+<p>The primary path is <strong>Direct API Key authentication</strong>. The Token Exchange mode remains <strong>backwards compatible long-term</strong> for existing integrations — no migration required.</p>
+<strong>Direct API Key (Recommended)</strong>
+<p>Single-step call. No token exchange, no expiration to manage.</p>
+<pre><code class="lang-bash">curl -X POST https://api-m.novada.com/v1/wallet/balance \
+  -H "Authorization: Bearer YOUR_API_KEY"
+</code></pre>
+<details>
+<summary>Backwards Compatible: Token Exchange Mode (no migration needed for existing users)</summary>
+<p>Call <code>/v1/oauth2/token</code> to exchange for an <code>access_token</code> (7-day TTL), then use the token for business endpoints. <strong>No code changes required for existing integrations</strong>, but new projects should use Direct API Key.</p>
+<pre><code class="lang-bash">curl -X POST https://api-m.novada.com/v1/oauth2/token \
+  -H "Authorization: Bearer YOUR_API_KEY"
+<p>&lt;h1&gt;Legacy Basic Auth (username:api_key) remains supported&lt;/h1&gt;<br></code></pre></p>
+</details>
+<h3>How to Generate a New API Key</h3>
+<p>A default Key is created automatically when you sign up. To create additional Keys (for environment isolation or rotation), follow these steps:</p>
+<h3>Sign in to the console</h3>
+<p>Go to [<strong>Dashboard › Account Settings › My account › API Key</strong>](https://dashboard.novada.com/api-key/).</p>
+<h3>Click "New API Key"</h3>
+<p>In the top-right corner of the list page. Maximum 10 Keys per account.</p>
+<h3>Configure the Key</h3>
+<p>Set a name (e.g. <code>prod-server</code>) and validity period (up to 5 years, or never expire).</p>
+<h3>Copy and save</h3>
+<p>Store it in a password manager or secret store (avoid committing plaintext to repositories). Keys can be viewed and copied from the Dashboard anytime.</p>
+<h3>API Key Management</h3>
+<table>
+<tr><td>Item</td><td>Description</td></tr>
+<tr><td>Access</td><td>[Dashboard › Account Settings › My account › API Key](https://dashboard.novada.com/api-key/)</td></tr>
+<tr><td>Limit</td><td>Up to <strong>10</strong> API Keys per account, each can be enabled or disabled independently.</td></tr>
+<tr><td>Validity</td><td>Never expire by default, up to 5 years if a finite period is preferred. Editable anytime in the API Key list.</td></tr>
+<tr><td>Enable / Disable</td><td>Takes effect immediately. Once disabled, all calls return <code>401 api_key_disabled</code>.</td></tr>
+<tr><td>Plan Decoupling</td><td>When a plan expires, calls return <code>402 product_not_subscribed</code>, but <strong>the API Key itself remains valid</strong>. Renewing the plan restores access immediately.</td></tr>
+<tr><td>Coverage</td><td><p>One Key covers all API Key endpoints: open APIs, Scraper API, and Web Unblocker (all HTTP/HTTPS, passed via <code>Authorization: Bearer YOUR\_API\_KEY</code>).<br>⚠️ <strong>Browser API browser-level access</strong> (WebDriver / WSS) uses <code>username:password</code> credentials and is not covered by API Key (see the <a href="https://www.novada.com/products/browser-api/">Browser API product page</a>).</p></td></tr>
+</table>
+<h3>FAQ</h3>
+<details>
+<summary>What if my API Key is lost or leaked?</summary>
+<p>Treat your API Key as sensitive as your account password. If you suspect a leak (accidentally committed to Git, seen by a colleague, device lost, etc.), immediately go to [<strong>Dashboard › Account Settings › My account › API Key</strong>](https://dashboard.novada.com/api-key/), delete the old Key and create a new one, then replace references in production.</p>
+<p>Once deleted, calls using the old Key immediately return <code>apikey invalid</code>. We recommend creating the new Key first, completing a gradual rollout, then deleting the old Key.</p>
+</details>
+<details>
+<summary>Can I view existing API Keys in plaintext from the Dashboard?</summary>
+<p>Yes. The Novada console lets you view and copy any existing Key anytime — it isn't lost when you close the page. That said, we still recommend saving it to a password manager or secret store at creation time, so multi-user / multi-environment setups can manage Keys centrally.</p>
+</details>
+<details>
+<summary>Can I "refresh" an existing API Key (keep the ID, only change the value)?</summary>
+<p>Novada does not currently support "rotate in place". The rotation flow is: <strong>create new → replace references → delete old Key</strong>. Old and new Keys can coexist briefly during rotation for a gradual rollout.</p>
+</details>
+<details>
+<summary>How many API Keys can a single account create?</summary>
+<p>Up to <strong>10</strong> API Keys per account, each can be enabled or disabled independently. A common pattern is one Key for each of dev / staging / prod, or one per product line / application — useful for fine-grained usage tracking and isolating the source of leaks.</p>
+</details>
+<details>
+<summary>Do API Keys support permission levels?</summary>
+<p>All API Keys currently have equivalent full permissions and can access every endpoint of every product on the account. Keys differ only in: name, validity, enabled status, and usage stats.</p>
+<p>Granular permissions (by product / by operation type) are planned for the future — you'll be able to select scopes when creating a Key.</p>
+</details>
+<details>
+<summary>Can I still use my API Key after my plan expires?</summary>
+<p>API Keys are decoupled from plans. When a plan expires, but <strong>the API Key itself remains valid</strong>. Renewing restores access immediately — no need to regenerate the Key or modify application code.</p>
+</details>
+<details>
+<summary>Do all products share the same API Key?</summary>
+<p>API Key based products (open APIs, Scraper API, Web Unblocker) share <strong>one Key across all endpoints</strong> — just pass <code>Authorization: Bearer YOUR_API_KEY</code> in the header.</p>
+<p>⚠️ <strong>Browser API browser-level access</strong> (WebDriver / WSS endpoints) and <strong>proxy runtime access</strong> (dialing) use <code>username:password</code> credentials and are not part of the API Key system. The 3 HTTP traffic management endpoints for Browser API on <code>api-m.novada.com</code> still use API Key.</p>
+</details>
+<h3>Security Best Practices</h3>
+<table>
+<tr><td>Item</td><td>Recommendation</td></tr>
+<tr><td>Rotation</td><td>Rotate production Keys every 90 days. Old and new Keys can coexist briefly.</td></tr>
+<tr><td>Separation</td><td>Create separate Keys for dev / staging / prod. Never use production Keys in local development.</td></tr>
+<tr><td>Storage</td><td>Never commit to Git. Use <code>.env</code> + secret management (Vault / Doppler / AWS Secrets Manager).</td></tr>
+<tr><td>Least Privilege</td><td>Granular permissions are coming. All Keys currently have equivalent full permissions.</td></tr>
+</table>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/getting-started/authentication.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article></section><section class="group"><h1 class="group-title">Proxy APIs</h1><article id="04_user"><h2 class="page-title">User / Proxy Account Mgmt</h2><h1>User</h1>
+<h2>POST /v1/proxy\_account/create</h2>
+<p>> Add  proxy user</p>
+<strong>POST /v1/proxy_account/create</strong> — Add  proxy user
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>product</code></td><td>string</td><td>✓</td><td>product:1=Residential，2=Rotating ISP,3=Rotating Datacenter,9=mobile,10=Browser API</td></tr>
+<tr><td><code>account</code></td><td>string</td><td>✓</td><td>Account Name</td></tr>
+<tr><td><code>password</code></td><td>string</td><td>✓</td><td>Account Password</td></tr>
+<tr><td><code>status</code></td><td>integer</td><td>✓</td><td>Account Status: 1=normal, -3=personal disabled</td></tr>
+<tr><td><code>remark</code></td><td>string</td><td></td><td>Remark</td></tr>
+<tr><td><code>limit_flow</code></td><td>string</td><td></td><td>Data Plans - Dynamic Residential Data Cap(G)</td></tr>
+</table>
+<h2>POST /v1/proxy\_account/list</h2>
+<p>> List proxy user&#x20;</p>
+<strong>POST /v1/proxy_account/list</strong> — List proxy user
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>product</code></td><td>integer</td><td>✓</td><td>product:1=Residential，2=Rotating ISP,3=Rotating Datacenter,9=mobile,10=Browser API</td></tr>
+<tr><td><code>status</code></td><td>integer</td><td></td><td>Status: 1=normal, -3=disabled</td></tr>
+<tr><td><code>account</code></td><td>string</td><td></td><td>Account Name</td></tr>
+<tr><td><code>page</code></td><td>integer</td><td>✓</td><td>page number</td></tr>
+<tr><td><code>limit</code></td><td>integer</td><td>✓</td><td>Number of entries returned per page</td></tr>
+</table>
+<h2>POST /v1/proxy\_account/update</h2>
+<p>> Update proxy user</p>
+<strong>POST /v1/proxy_account/update</strong> — Update proxy user
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>id</code></td><td>integer</td><td>✓</td><td>ID：your account id</td></tr>
+<tr><td><code>account</code></td><td>string</td><td>✓</td><td>Account Name</td></tr>
+<tr><td><code>password</code></td><td>string</td><td>✓</td><td>Account Password</td></tr>
+<tr><td><code>status</code></td><td>integer</td><td></td><td>Account Status: 1=normal, -3=disabled</td></tr>
+<tr><td><code>remark</code></td><td>string</td><td></td><td>Remark</td></tr>
+<tr><td><code>limit_flow</code></td><td>string</td><td></td><td>Data Plans - Dynamic Residential Data Cap(G)</td></tr>
+</table>
+<h2>POST /v1/proxy\_account/consume\_log</h2>
+<p>> List proxy user traffic consumption</p>
+<strong>POST /v1/proxy_account/consume_log</strong> — List proxy user traffic consumption
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>account_id</code></td><td>integer</td><td>✓</td><td>Account ID</td></tr>
+<tr><td><code>start_time</code></td><td>string</td><td></td><td>Start Time (datetime)</td></tr>
+<tr><td><code>end_time</code></td><td>string</td><td></td><td>End Time (datetime)</td></tr>
+<tr><td><code>limit</code></td><td>integer</td><td>✓</td><td>Number of entries returned per page</td></tr>
+<tr><td><code>page</code></td><td>integer</td><td>✓</td><td>page number</td></tr>
+</table>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/user.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article><article id="05_whitelist"><h2 class="page-title">IP Whitelist</h2><h1>Whitelisted</h1>
+<h2>POST /v1/white\_list/add</h2>
+<p>> Add whitelist ip</p>
+<strong>POST /v1/white_list/add</strong> — Add whitelist ip
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>product</code></td><td>integer</td><td>✓</td><td>Product:1=Residential,5=Static isp</td></tr>
+</table>
+4=Unlimited proxies |
+<table>
+<tr><td><code>ip</code></td><td>string</td><td>✓</td><td>IP</td></tr>
+<tr><td><code>remark</code></td><td>string</td><td></td><td>Remark</td></tr>
+</table>
+<h2>POST /v1/white\_list/list</h2>
+<p>> List whitelist ip</p>
+<strong>POST /v1/white_list/list</strong> — List whitelist ip
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>product</code></td><td>integer</td><td>✓</td><td>Product:1=Residential,5=Static product</td></tr>
+<tr><td><code>ip</code></td><td>string</td><td></td><td>Ip</td></tr>
+<tr><td><code>start_time</code></td><td>string</td><td></td><td>Start Time (datetime)</td></tr>
+<tr><td><code>end_time</code></td><td>string</td><td></td><td>End Time (datetime)</td></tr>
+<tr><td><code>lock</code></td><td>integer</td><td></td><td>Locked: 0 Unlocked 1 Locked</td></tr>
+</table>
+<h2>POST /v1/white\_list/del</h2>
+<p>> Delete whitelist ip</p>
+<strong>POST /v1/white_list/del</strong> — Delete whitelist ip
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>product</code></td><td>string</td><td>✓</td><td>Product:1=Residential,5=Static product</td></tr>
+<tr><td><code>ips</code></td><td>string</td><td>✓</td><td>ips:multiple use ',' separated</td></tr>
+</table>
+<h2>POST /v1/white\_list/remark</h2>
+<p>> Remark whitelist ip</p>
+<strong>POST /v1/white_list/remark</strong> — Remark whitelist ip
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>product</code></td><td>integer</td><td>✓</td><td>Product:1=Residential,5=Static product</td></tr>
+<tr><td><code>id</code></td><td>string</td><td>✓</td><td>Id of ip</td></tr>
+<tr><td><code>remark</code></td><td>string</td><td></td><td>Remark</td></tr>
+</table>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/whitelisted.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article><article id="06_residential"><h2 class="page-title">Residential Proxies</h2><h1>Residential Proxies</h1>
+<h2>POST /v1/proxy/domestic\_dynamic\_area</h2>
+<p>> List residential proxy countries</p>
+<strong>POST /v1/proxy/domestic_dynamic_area</strong> — List residential proxy countries
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>search_word</code></td><td>string</td><td></td><td>Country Name</td></tr>
+</table>
+<h2>POST /v1/proxy/city\_by\_code</h2>
+<p>> List residential proxy states</p>
+<strong>POST /v1/proxy/city_by_code</strong> — List residential proxy states
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>code</code></td><td>string</td><td></td><td>Country Code</td></tr>
+</table>
+<h2>POST /v1/proxy/region\_by\_city</h2>
+<p>> List residential proxy cities</p>
+<strong>POST /v1/proxy/region_by_city</strong> — List residential proxy cities
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>code</code></td><td>string</td><td>✓</td><td>Country Code</td></tr>
+<tr><td><code>region</code></td><td>string</td><td>✓</td><td>Continent Name</td></tr>
+</table>
+<h2>POST /v1/proxy/city\_isp</h2>
+<p>> List residential proxy isp</p>
+<strong>POST /v1/proxy/city_isp</strong> — List residential proxy isp
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>code</code></td><td>string</td><td>✓</td><td>Country Code</td></tr>
+</table>
+<h2>POST /v1/residential\_flow/consume\_log</h2>
+<p>> List main account traffic consumption</p>
+<strong>POST /v1/residential_flow/consume_log</strong> — List main account traffic consumption
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>start_time</code></td><td>string</td><td>✓</td><td>Start time</td></tr>
+<tr><td><code>end_time</code></td><td>string</td><td>✓</td><td>End time</td></tr>
+</table>
+<h2>POST /v1/residential\_flow/balance</h2>
+<p>> Show remaining traffic</p>
+<strong>POST /v1/residential_flow/balance</strong> — Show remaining traffic
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/residential-proxies.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article><article id="07_mobile"><h2 class="page-title">Mobile Proxies</h2><h1>Mobile Proxies</h1>
+<h2>POST /v1/proxy/mobile\_area</h2>
+<p>> List mobile proxy countries</p>
+<strong>POST /v1/proxy/mobile_area</strong> — List mobile proxy countries
+<h2>POST /v1/mobile\_flow/mobile\_flow\_balance</h2>
+<p>> Show mobile proxy remaining traffic</p>
+<strong>POST /v1/mobile_flow/mobile_flow_balance</strong> — Show mobile proxy remaining traffic
+<h2>POST /v1/mobile\_flow/mobile\_flow\_use</h2>
+<p>> List mobile proxy main account traffic consumption</p>
+<strong>POST /v1/mobile_flow/mobile_flow_use</strong> — List mobile proxy main account traffic consumption
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>start_time</code></td><td>string</td><td>✓</td><td>Start time</td></tr>
+<tr><td><code>end_time</code></td><td>string</td><td>✓</td><td>End time</td></tr>
+<tr><td><code>day_or_hour</code></td><td>string</td><td>✓</td><td>1-hour 2-day</td></tr>
+</table>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/mobile-proxies.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article><article id="08_rotating_isp"><h2 class="page-title">Rotating ISP Proxies</h2><h1>Rotating ISP Proxies</h1>
+<h2>POST /v1/proxy/isp\_data\_area</h2>
+<p>> List rotating ISP countries</p>
+<strong>POST /v1/proxy/isp_data_area</strong> — List rotating ISP countries
+<h2>POST /v1/isp\_flow/balance</h2>
+<p>> Show remaining traffic</p>
+<strong>POST /v1/isp_flow/balance</strong> — Show remaining traffic
+<h2>POST /v1/isp\_flow/consume\_log</h2>
+<p>> List main account traffic consumption</p>
+<strong>POST /v1/isp_flow/consume_log</strong> — List main account traffic consumption
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>start_time</code></td><td>string</td><td>✓</td><td>Start time</td></tr>
+<tr><td><code>end_time</code></td><td>string</td><td>✓</td><td>End time</td></tr>
+</table>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/rotating-isp-proxies.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article><article id="09_rotating_dc"><h2 class="page-title">Rotating Datacenter Proxies</h2><h1>Rotating Datacenter Proxies</h1>
+<h2>POST /v1/proxy/dynamic\_data\_area</h2>
+<p>> List rotating datacenter countries</p>
+<strong>POST /v1/proxy/dynamic_data_area</strong> — List rotating datacenter countries
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>search_word</code></td><td>string</td><td></td><td>Country Name</td></tr>
+</table>
+<h2>POST /v1/dc\_flow/consume\_log</h2>
+<p>> List main account traffic consumption</p>
+<strong>POST /v1/dc_flow/consume_log</strong> — List main account traffic consumption
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>start_time</code></td><td>string</td><td>✓</td><td>Start time</td></tr>
+<tr><td><code>end_time</code></td><td>string</td><td>✓</td><td>End time</td></tr>
+</table>
+<h2>POST /v1/dc\_flow/balance</h2>
+<p>> Show remaining traffic</p>
+<strong>POST /v1/dc_flow/balance</strong> — Show remaining traffic
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/rotating-datacenter-proxies.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article><article id="10_static_isp"><h2 class="page-title">Static ISP Proxies</h2><h1>Static ISP Proxies</h1>
+<h2>POST /v1/static\_house/open</h2>
+<p>> Open ips of static isp</p>
+<strong>POST /v1/static_house/open</strong> — Open ips of static isp
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>ip_type</code></td><td>string</td><td>✓</td><td>ip type: normal=Standard ISP IP,premium=Premium ISP IP</td></tr>
+<tr><td><code>region</code></td><td>string</td><td>✓</td><td>area:num</td></tr>
+<tr><td><code>duration</code></td><td>string</td><td>✓</td><td>IP activation time:week</td><td>month</td></tr>
+<tr><td><code>num</code></td><td>integer</td><td>✓</td><td>Number of ips opened</td></tr>
+</table>
+<h2>POST /v1/static\_house/list</h2>
+<p>> List ips of static isp</p>
+<strong>POST /v1/static_house/list</strong> — List ips of static isp
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>status</code></td><td>string</td><td></td><td>Status: ""=ALL, 1=In use, 2=Expired,3=Released</td></tr>
+<tr><td><code>region</code></td><td>string</td><td></td><td>Area Code</td></tr>
+<tr><td><code>key_word</code></td><td>string</td><td></td><td>Keywords (remarks, order number, ip)</td></tr>
+<tr><td><code>is_auto_renew</code></td><td>integer</td><td></td><td>Whether to automatically renew 1 Yes - 1 No (When the input parameter is -1, the return parameter "auto_renew" is 0, indicating non-automatic renewal)</td></tr>
+<tr><td><code>page</code></td><td>integer</td><td>✓</td><td>page number</td></tr>
+<tr><td><code>limit</code></td><td>integer</td><td>✓</td><td>Number of entries per page</td></tr>
+</table>
+<h2>POST /v1/static\_house/export</h2>
+<p>> Export ips of static isp</p>
+<strong>POST /v1/static_house/export</strong> — Export ips of static isp
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>status</code></td><td>integer</td><td></td><td>Status: ""=ALL, 1=In use, 2=Expired,3=Released</td></tr>
+<tr><td><code>region</code></td><td>string</td><td></td><td>Area Code</td></tr>
+<tr><td><code>key_word</code></td><td>string</td><td></td><td>Keywords (remarks, order number, ip)</td></tr>
+<tr><td><code>is_auto_renew</code></td><td>integer</td><td></td><td>Whether to automatically renew 1 Yes - 1 No</td></tr>
+</table>
+<h2>POST /v1/static\_house/region</h2>
+<p>> List regions of static isp</p>
+<strong>POST /v1/static_house/region</strong> — List regions of static isp
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>isp_type</code></td><td>string</td><td>✓</td><td>isp type：isp-resi=Static Residential IP ,isp-resi-hq=Premium Residential IP</td></tr>
+</table>
+<h2>POST /v1/static\_house/renew</h2>
+<p>> Renew ips of static isp</p>
+<strong>POST /v1/static_house/renew</strong> — Renew ips of static isp
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>renew_ip_list</code></td><td>string</td><td>✓</td><td>Renew IP, multiple use ',' separated</td></tr>
+<tr><td><code>duration</code></td><td>string</td><td>✓</td><td>IP activation time:week</td><td>month</td></tr>
+</table>
+<h2>POST /v1/static\_house/renew\_setting</h2>
+<p>> Update renewal setting</p>
+<strong>POST /v1/static_house/renew_setting</strong> — Update renewal setting
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>type</code></td><td>string</td><td>✓</td><td>Product type:static_house</td></tr>
+<tr><td><code>ids</code></td><td>string</td><td>✓</td><td>Ip's id:multiple use ',' separated</td></tr>
+<tr><td><code>package_type</code></td><td>string</td><td>✓</td><td>IP activation time:week</td><td>month</td></tr>
+<tr><td><code>status</code></td><td>integer</td><td>✓</td><td>Status: -1=disabled, 1=normal</td></tr>
+<tr><td><code>renew_type</code></td><td>integer</td><td>✓</td><td>Renewal method: 1 wallet, 2 credit cards</td></tr>
+</table>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/static-isp-proxies.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article><article id="11_dedicated_dc"><h2 class="page-title">Dedicated Datacenter Proxies</h2><h1>Dedicated Datacenter Proxies</h1>
+<h2>POST /v1/static/open</h2>
+<p>> Open ips of dedicated datacenter</p>
+<strong>POST /v1/static/open</strong> — Open ips of dedicated datacenter
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>region</code></td><td>string</td><td>✓</td><td>area:num</td></tr>
+<tr><td><code>duration</code></td><td>string</td><td>✓</td><td>IP activation time:week</td><td>month</td></tr>
+<tr><td><code>num</code></td><td>integer</td><td>✓</td><td>Number of ips opened</td></tr>
+</table>
+<h2>POST /v1/static/list</h2>
+<p>> List ips of dedicated datacenter</p>
+<strong>POST /v1/static/list</strong> — List ips of dedicated datacenter
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>status</code></td><td>integer</td><td></td><td>Status: ""=ALL, 1=In use, 2=Expired,3=Released</td></tr>
+<tr><td><code>region</code></td><td>string</td><td></td><td>Area Code</td></tr>
+<tr><td><code>key_word</code></td><td>string</td><td></td><td>Keywords (remarks, order number, ip)</td></tr>
+<tr><td><code>is_auto_renew</code></td><td>integer</td><td></td><td>Whether to automatically renew 1 Yes - 1 No</td></tr>
+<tr><td><code>page</code></td><td>integer</td><td>✓</td><td>page number</td></tr>
+<tr><td><code>limit</code></td><td>integer</td><td>✓</td><td>Number of entries per page</td></tr>
+</table>
+<h2>POST /v1/static/export</h2>
+<p>> Export ips of dedicated datacenter</p>
+<strong>POST /v1/static/export</strong> — Export ips of dedicated datacenter
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>status</code></td><td>integer</td><td></td><td>Status: ""=ALL, 1=In use, 2=Expired,3=Released</td></tr>
+<tr><td><code>region</code></td><td>string</td><td></td><td>Area Code</td></tr>
+<tr><td><code>key_word</code></td><td>string</td><td></td><td>Keywords (remarks, order number, ip)</td></tr>
+<tr><td><code>is_auto_renew</code></td><td>integer</td><td></td><td>Whether to automatically renew 1 Yes - 1 No</td></tr>
+</table>
+<h2>POST /v1/static/region</h2>
+<p>> List regions of dedicated datacenter</p>
+<strong>POST /v1/static/region</strong> — List regions of dedicated datacenter
+<h2>POST /v1/static/renew</h2>
+<p>> Renew ips of dedicated datacenter</p>
+<strong>POST /v1/static/renew</strong> — Renew ips of dedicated datacenter
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>renew_ip_list</code></td><td>string</td><td>✓</td><td>Renew IP, multiple use ',' separated</td></tr>
+<tr><td><code>duration</code></td><td>string</td><td>✓</td><td>IP activation time:week</td><td>month</td></tr>
+</table>
+<h2>POST /v1/static/renew\_setting</h2>
+<p>> Update renewal setting</p>
+<strong>POST /v1/static/renew_setting</strong> — Update renewal setting
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>type</code></td><td>string</td><td>✓</td><td>Product type:static</td></tr>
+<tr><td><code>ids</code></td><td>string</td><td>✓</td><td>Ip's id(multiple use ',' separated)</td></tr>
+<tr><td><code>package_type</code></td><td>string</td><td>✓</td><td>IP activation time:week</td><td>month</td></tr>
+<tr><td><code>status</code></td><td>integer</td><td>✓</td><td>Status: -1=disabled, 1=normal</td></tr>
+<tr><td><code>renew_type</code></td><td>integer</td><td>✓</td><td>Renewal method: 1 wallet, 2 credit cards</td></tr>
+</table>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/dedicated-datacenter-proxies.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article></section><section class="group"><h1 class="group-title">Scraping Solutions</h1><article id="12_universal"><h2 class="page-title">Universal Scraper</h2><h1>Universal</h1>
+<h2>POST /v1/capture/get\_balance</h2>
+<p>> Get the remaining balance</p>
+<strong>POST /v1/capture/get_balance</strong> — Get the remaining balance
+<h2>POST /v1/capture/all\_logs</h2>
+<p>> Capture package consumption statistics</p>
+<strong>POST /v1/capture/all_logs</strong> — Capture package consumption statistics
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>category</code></td><td>string</td><td></td><td>Optional values: scraper, unblocker, browser. If not passed, all will be obtained by default</td></tr>
+<tr><td><code>apikey</code></td><td>string</td><td></td><td>Can be queried based on apikey</td></tr>
+<tr><td><code>start_time</code></td><td>string</td><td>✓</td><td>Start time(2026-06-01 00:00:00)，Starting and ending time on the same day, obtained by hour dimension</td></tr>
+<tr><td><code>end_time</code></td><td>string</td><td>✓</td><td>End time(2026-06-01 00:00:00)</td></tr>
+</table>
+<h2>POST /v1/proxy/unblocker\_area</h2>
+<p>> Get list of countries</p>
+<strong>POST /v1/proxy/unblocker_area</strong> — Get list of countries
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>search_word</code></td><td>string</td><td></td><td></td></tr>
+</table>
+<h2>POST /v1/proxy/unblocker\_area\_by\_country</h2>
+<p>> Get list of states</p>
+<strong>POST /v1/proxy/unblocker_area_by_country</strong> — Get list of states
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>code</code></td><td>string</td><td>✓</td><td>country code</td></tr>
+</table>
+<h2>POST /v1/proxy/unblocker\_city\_by\_area</h2>
+<p>> Get city list</p>
+<strong>POST /v1/proxy/unblocker_city_by_area</strong> — Get city list
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>code</code></td><td>string</td><td>✓</td><td>country code</td></tr>
+<tr><td><code>region</code></td><td>string</td><td>✓</td><td>State/Province Name</td></tr>
+</table>
+<h2>POST /v1/proxy/unblocker\_city\_isp</h2>
+<p>> Get list of carriers</p>
+<strong>POST /v1/proxy/unblocker_city_isp</strong> — Get list of carriers
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>code</code></td><td>string</td><td>✓</td><td>country code</td></tr>
+</table>
+<h2>POST /v1/capture/unit</h2>
+<p>> Get user capture unit price</p>
+<strong>POST /v1/capture/unit</strong> — Get user capture unit price
+<h2>POST /v1/capture/request\_log</h2>
+<p>> Get request logs</p>
+<strong>POST /v1/capture/request_log</strong> — Get request logs
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>category</code></td><td>string</td><td>✓</td><td>scraper,unblocker</td></tr>
+<tr><td><code>apikey</code></td><td>string</td><td></td><td>Can be queried based on apikey</td></tr>
+<tr><td><code>limit</code></td><td>string</td><td>✓</td><td></td></tr>
+<tr><td><code>page</code></td><td>string</td><td>✓</td><td></td></tr>
+</table>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/scraping-solutions/universal.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article><article id="13_web_unblocker"><h2 class="page-title">Web Unblocker</h2><h1>Web Unblocker</h1>
+<h2>Web Unblocker request</h2>
+<p>> url：<https://webunlocker.novada.com>, The value of the token is the user's corresponding API key.</p>
+<strong>POST /request</strong> — Web Unblocker request
+url：https://webunlocker.novada.com, The value of the token is the user's corresponding API key.
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/scraping-solutions/web-unblocker.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article><article id="14_scraper_api"><h2 class="page-title">Scraper API</h2><h1>Scraper API</h1>
+<h3>Create task</h3>
+<p>Api Path：<https://scraper.novada.com/request></p>
+<p>Request method：POST</p>
+<p>Content-Type：x-www-form-urlencoded</p>
+<p>Authentication：Bearer YOUR\_API\_KEY</p>
+<p>> Get Api Key：[Dashboard](https://dashboard.novada.com/cn/overview/scraper/api/?id=25)</p>
+<h4>Request params</h4>
+<table><thead><tr><th width="219">field</th><th width="109">type</th><th width="116">required</th><th>description</th></tr></thead><tbody><tr><td>scraper_name</td><td>string</td><td>yes</td><td>scraper name</td></tr><tr><td>scraper_id</td><td>number</td><td>yes</td><td>scraper id</td></tr><tr><td>scraper_params</td><td>string</td><td>no</td><td>Capture parameters, required in non search scenarios,Please refer to the <a href="https://developer.novada.com/novada/advanced-proxy-solutions/scraper-api/target-sites-supported-by-scraper-api">API parameter description</a> for specific parameters</td></tr><tr><td>scraper_universal</td><td>string</td><td>no</td><td>youtube video params</td></tr><tr><td>scraper_errors</td><td>boolean</td><td>yes</td><td>whether to return an error</td></tr><tr><td>file_name</td><td>string</td><td>yes</td><td>custom file name</td></tr></tbody></table>
+<p>> Request example</p>
+<pre><code class="lang-bash">curl -X POST "https://scraper.novada.com/request" ^
+  -H "Authorization: Bearer YOUR_API_KEY" ^
+  -H "Content-Type: application/x-www-form-urlencoded" ^
+  -d "scraper_name=amazon.com" ^
+  -d "scraper_id=amazon_product_keywords" ^
+  -d "scraper_errors=true" ^
+  -d "scraper_params=[{\"keyword\":\"Coffer\",\"max_pages\":\"1\",\"min_price\":\"5\",\"max_price\":\"50\"}]"
+</code></pre>
+<p>> Return example 200 Response</p>
+<h3>Get task list</h3>
+<p>Api Path：<https://api-m.novada.com/v1/scraper/task\\_list></p>
+<p>Request method：POST</p>
+<p>Content-Type：form-data</p>
+<p>Authentication：Bearer YOUR\_API\_KEY</p>
+<p>> Token acquisition method: [Quick start](https://developer-api.novada.com/)</p>
+<h4>Request params</h4>
+<table>
+<tr><td>field</td><td>type</td><td>required</td><td>description</td></tr>
+<tr><td>limit</td><td>string</td><td>yes</td><td>page size，max value 100.</td></tr>
+<tr><td>page</td><td>string</td><td>yes</td><td>page</td></tr>
+</table>
+<p>> Request example</p>
+<pre><code class="lang-bash">curl -X POST "https://api-m.novada.com/v1/scraper/task_list" ^
+  -H "Authorization: Bearer YOUR_API_KEY" ^
+  -H "Content-Type: application/x-www-form-urlencoded" ^
+  -d "limit=10" ^
+  -d "page=1"
+</code></pre>
+<p>> Return example 200 Response</p>
+<h3>Get the running status of one or more tasks</h3>
+<p>Api Path：<https://api-m.novada.com/v1/scraper/task\\_status></p>
+<p>Request method：POST</p>
+<p>Content-Type：form-data</p>
+<p>Authentication：Bearer YOUR\_API\_KEY</p>
+<p>> Token acquisition method: [Quick start](https://developer-api.novada.com/)</p>
+<h4>Request params</h4>
+<table>
+<tr><td>field</td><td>type</td><td>required</td><td>description</td></tr>
+<tr><td>task\_ids</td><td>string</td><td>yes</td><td>Task ID list, separated by commas in English, max 200 task id.</td></tr>
+</table>
+<p>> Request example</p>
+<pre><code class="lang-bash">curl -X POST "https://api-m.novada.com/v1/scraper/task_status" ^
+  -H "Authorization: Bearer YOUR_API_KEY" ^
+  -H "Content-Type: application/x-www-form-urlencoded" ^
+  -d "task_ids=330ae83bcff7479b9c97e586dbf93801"
+</code></pre>
+<p>> Return example 200 Response</p>
+<h3>Get the status of the last task for the current account</h3>
+<p>Api Path：<https://api-m.novada.com/v1/scraper/last\\_task\\_status></p>
+<p>Request method：POST</p>
+<p>Content-Type：form-data</p>
+<p>Authentication：Bearer YOUR\_API\_KEY</p>
+<p>> Token acquisition method: [Quick start](https://developer-api.novada.com/)</p>
+<h4>Request params</h4>
+<p>No need to transmit parameters</p>
+<p>> Return example 200 Response</p>
+<h3>Get task result file</h3>
+<p>Api Path：<https://api-m.novada.com/v1/scraper/task\\_download></p>
+<p>Request method：POST</p>
+<p>Content-Type：form-data</p>
+<p>Authentication：Bearer YOUR\_API\_KEY</p>
+<p>> Token acquisition method: [Quick start](https://developer-api.novada.com/)</p>
+<h4>Request params</h4>
+<table>
+<tr><td>field</td><td>type</td><td>required</td><td>description</td></tr>
+<tr><td>task\_ids</td><td>string</td><td>yes</td><td>Task ID list, separated by commas in English, max 200 task id.</td></tr>
+<tr><td>file\_type</td><td>string</td><td>yes</td><td>file type：json，csv, xlsx</td></tr>
+</table>
+<p>> Request example</p>
+<pre><code class="lang-bash">curl -X POST "https://api-m.novada.com/v1/scraper/task_download" ^
+  -H "Authorization: Bearer YOUR_API_KEY" ^
+  -H "Content-Type: application/x-www-form-urlencoded" ^
+  -d "task_ids=330ae83bcff7479b9c97e586dbf93801" ^
+  -d "file_type=json"
+</code></pre>
+<p>> Return example 200 Response</p>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/scraping-solutions/scraper-api.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article><article id="15_browser_api"><h2 class="page-title">Browser API</h2><h1>Browser API</h1>
+<h2>POST /v1/proxy\_account/create</h2>
+<p>> Add  proxy user</p>
+<strong>POST /v1/proxy_account/create</strong> — Add  proxy user
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>product</code></td><td>string</td><td>✓</td><td>product:10=Browser API</td></tr>
+<tr><td><code>account</code></td><td>string</td><td>✓</td><td>Account Name</td></tr>
+<tr><td><code>password</code></td><td>string</td><td>✓</td><td>Account Password</td></tr>
+<tr><td><code>status</code></td><td>integer</td><td>✓</td><td>Account Status: 1=normal, -3=personal disabled</td></tr>
+<tr><td><code>remark</code></td><td>string</td><td></td><td>Remark</td></tr>
+<tr><td><code>limit_flow</code></td><td>string</td><td></td><td>Data Plans - Dynamic Residential Data Cap(G)</td></tr>
+</table>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/scraping-solutions/browser-api.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article></section><section class="group"><h1 class="group-title">Resource Management</h1><article id="16_wallet"><h2 class="page-title">Wallet</h2><h1>Wallet</h1>
+<h2>POST /v1/wallet/balance</h2>
+<p>> Show wallet balance</p>
+<strong>POST /v1/wallet/balance</strong> — Show wallet balance
+<h2>POST /v1/wallet/usage\_record</h2>
+<p>> List usage record</p>
+<strong>POST /v1/wallet/usage_record</strong> — List usage record
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>page</code></td><td>integer</td><td></td><td>Number of entries per page</td></tr>
+<tr><td><code>limit</code></td><td>integer</td><td></td><td>page number</td></tr>
+</table>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/resource-management/wallet.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article><article id="17_prohibit_domain"><h2 class="page-title">Prohibit Domain</h2><h1>Prohibit Domain</h1>
+<h2>POST /v1/prohibit\_domain/add</h2>
+<p>> Add blocked domain</p>
+<strong>POST /v1/prohibit_domain/add</strong> — Add blocked domain
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>address</code></td><td>string</td><td>✓</td><td>Allow access to the address</td></tr>
+</table>
+<h2>POST /v1/prohibit\_domain/list</h2>
+<p>> List blocked domain</p>
+<strong>POST /v1/prohibit_domain/list</strong> — List blocked domain
+<h2>POST /v1/prohibit\_domain/del</h2>
+<p>> Delete blocked domain</p>
+<strong>POST /v1/prohibit_domain/del</strong> — Delete blocked domain
+<table>
+<tr><td>Field</td><td>Type</td><td>Required</td><td>Description</td></tr>
+<tr><td><code>id</code></td><td>string</td><td>✓</td><td>ID</td></tr>
+<tr><td><code>is_all</code></td><td>string</td><td>✓</td><td>All: 1 Yes 2 No</td></tr>
+</table>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/resource-management/prohibit-domain.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article></section><section class="group"><h1 class="group-title">Reference</h1><article id="18_error_codes"><h2 class="page-title">Error Codes</h2><h1>Error Codes</h1>
+<h2>Error Response Structure</h2>
+<p>All error responses use the following unified structure:</p>
+<table>
+<tr><td>Field</td><td>Type</td><td>Description</td></tr>
+<tr><td><code>code</code></td><td><code>int</code></td><td>Business code: <code>0</code> = success; <code>!= 0</code> = failure (see the reference below).</td></tr>
+<tr><td><code>data</code></td><td><code>object</code></td><td>When an error occurs, this field is empty.</td></tr>
+<tr><td><code>msg</code></td><td><code>string</code></td><td>Human-readable message. English by default, suitable for logging.</td></tr>
+</table>
+<h2>Error Code Reference</h2>
+<strong>The HTTP response code is always <code>200</code>.</strong> Determine the specific error type by checking the business <code>code</code> field, not the HTTP status.
+<table>
+<tr><td>HTTP</td><td>code</td><td>Trigger</td><td>Suggested Action</td></tr>
+<tr><td><code>200</code></td><td><code>50001</code></td><td>API Key does not exist or is invalid</td><td>Check the header and confirm the Key is copied in full.</td></tr>
+<tr><td><code>200</code></td><td><code>50002</code></td><td>API Key is disabled</td><td>Enable the Key in the Dashboard or use a different one.</td></tr>
+<tr><td><code>200</code></td><td><code>50003</code></td><td>API Key has expired</td><td>Renew the Key in the Dashboard or create a new one.</td></tr>
+<tr><td><code>200</code></td><td><code>500</code></td><td>Server-side error</td><td>Report the issue with the <code>request_id</code> to <support@novada.com>.</td></tr>
+</table>
+<p>---</p>
+<h1>Agent Instructions</h1>
+This documentation is published with GitBook. GitBook is the documentation platform designed so that both humans and AI agents can read, navigate, and reason over technical content effectively. Learn more at gitbook.com.
+<h2>Querying This Documentation</h2>
+If you need additional information that is not directly available in this page, you can query the documentation dynamically by asking a question.
+<p>Perform an HTTP GET request on the current page URL with the <code>ask</code> query parameter, and the optional <code>goal</code> query parameter:</p>
+<pre><code class="lang-">GET https://developer-api.novada.com/reference/error-codes.md?ask=&lt;question&gt;&goal=&lt;endgoal&gt;
+</code></pre>
+<code>ask</code> is the immediate question: it should be specific, self-contained, and written in natural language.
+<code>goal</code> is optional and describes the broader end goal you are ultimately trying to accomplish on behalf of the user. GitBook uses it to tailor the answer towards what is most useful for that goal.
+<p>The response will contain a direct answer to the question and relevant excerpts and sources from the documentation.</p>
+<p>Use this mechanism when the answer is not explicitly present in the current page, you need clarification or additional context, or you want to retrieve related documentation sections.</p></article></section>
+</div>
+</body>
+</html>

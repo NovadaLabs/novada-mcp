@@ -193,7 +193,7 @@ async function probeScraperAll(apiKey: string): Promise<ProductProbeResult> {
     const code = body?.code as number | undefined;
     if (code === 0) {
       return {
-        product: "Scraper API (129 platforms)",
+        product: "Scraper API (13 platforms)",
         status: "active",
         latency,
         notes: "google_search probe OK",
@@ -201,7 +201,7 @@ async function probeScraperAll(apiKey: string): Promise<ProductProbeResult> {
     }
     if (code === 11006) {
       return {
-        product: "Scraper API (129 platforms)",
+        product: "Scraper API (13 platforms)",
         status: "not_activated",
         latency,
         notes: "code=11006 — contact support to enable Bearer token access",
@@ -210,14 +210,14 @@ async function probeScraperAll(apiKey: string): Promise<ProductProbeResult> {
     }
     if (code === 11000) {
       return {
-        product: "Scraper API (129 platforms)",
+        product: "Scraper API (13 platforms)",
         status: "error",
         latency,
         notes: "code=11000 — invalid API key",
       };
     }
     return {
-      product: "Scraper API (129 platforms)",
+      product: "Scraper API (13 platforms)",
       status: "not_activated",
       latency,
       notes: `code=${code ?? res.status}`,
@@ -226,7 +226,7 @@ async function probeScraperAll(apiKey: string): Promise<ProductProbeResult> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return {
-      product: "Scraper API (129 platforms)",
+      product: "Scraper API (13 platforms)",
       status: "error",
       latency: null,
       notes: msg.slice(0, 100),
@@ -265,7 +265,21 @@ function probeProxyAll(): ProductProbeResult {
   };
 }
 
+// INC-195: Detect hosted (Vercel/Lambda) environment
+function isHostedEnvironment(): boolean {
+  return !!(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
+}
+
 function probeBrowserAll(): ProductProbeResult {
+  // INC-195: On hosted environments, Browser API is architecturally unavailable
+  if (isHostedEnvironment()) {
+    return {
+      product: "Browser API",
+      status: "not_configured",
+      latency: null,
+      notes: "Not available on hosted — requires WebSocket transport not supported on Vercel Edge/Lambda. Use local MCP server.",
+    };
+  }
   const ws = getBrowserWs();
   if (!ws) {
     return {
@@ -354,7 +368,7 @@ export async function novadaHealthAll(apiKey: string): Promise<string> {
   const results: ProductProbeResult[] = [
     searchSettled.status  === "fulfilled" ? searchSettled.value  : errorFallback("Search API"),
     extractSettled.status === "fulfilled" ? extractSettled.value : errorFallback("Extract / Web Unblocker"),
-    scraperSettled.status === "fulfilled" ? scraperSettled.value : errorFallback("Scraper API (129 platforms)"),
+    scraperSettled.status === "fulfilled" ? scraperSettled.value : errorFallback("Scraper API (13 platforms)"),
     probeProxyAll(),
     probeBrowserAll(),
     unblockSettled.status === "fulfilled" ? unblockSettled.value : errorFallback("Unblock API"),

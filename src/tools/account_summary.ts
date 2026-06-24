@@ -38,8 +38,12 @@ function tryParse<T = unknown>(jsonText: string): T {
 
 async function runSection<T>(label: string, fn: () => Promise<string>): Promise<Section<T>> {
   try {
-    const text = await fn();
-    return { ok: true, data: tryParse<T>(text) };
+    const raw = await fn();
+    const parsed = tryParse<T>(raw);
+    if (parsed && typeof parsed === 'object' && '_parse_error' in parsed) {
+      throw new Error('Failed to parse API response — raw: ' + String(raw).slice(0, 200));
+    }
+    return { ok: true, data: parsed };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, error: `${label}: ${msg}` };
@@ -73,15 +77,15 @@ interface CaptureLogsPayload {
  */
 export async function novadaAccountSummary(
   _params: AccountSummaryParams,
-  _apiKey?: string,
+  apiKey?: string,
 ): Promise<string> {
   const t0 = Date.now();
 
   const [wallet, plans, capture] = await Promise.all([
-    runSection<WalletPayload>("wallet_balance", () => novadaWalletBalance({} as never)),
-    runSection<PlanPayload>("plan_balance_all", () => novadaPlanBalanceAll({} as never)),
+    runSection<WalletPayload>("wallet_balance", () => novadaWalletBalance({} as never, apiKey)),
+    runSection<PlanPayload>("plan_balance_all", () => novadaPlanBalanceAll({} as never, apiKey)),
     runSection<CaptureLogsPayload>("capture_logs", () =>
-      novadaCaptureLogs({ page: 1, page_size: 5 } as never),
+      novadaCaptureLogs({ page: 1, page_size: 5 } as never, apiKey),
     ),
   ]);
 

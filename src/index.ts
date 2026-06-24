@@ -120,6 +120,9 @@ import {
   novadaAccountSummary,
   validateAccountSummaryParams,
   AccountSummaryParamsSchema,
+  novadaIpWhitelist,
+  validateIpWhitelistParams,
+  IpWhitelistParamsSchema,
 } from "./tools/index.js";
 
 // ─── Configuration ───────────────────────────────────────────────────────────
@@ -158,11 +161,12 @@ const TOOLS = [
   },
   {
     name: "novada_extract",
-    description: `Extract clean content from any URL. Handles Cloudflare, DataDome, Kasada automatically via auto-escalation (static → JS render → Browser CDP). Batch mode: pass url as array for up to 10 pages in parallel.
+    description: `Extract content from any URL. Handles Cloudflare, DataDome, Kasada automatically via auto-escalation (static → JS render → Browser CDP). Batch mode: pass url as array for up to 10 pages in parallel.
 
 **Use for:** Reading pages, batch-extracting search results, pulling structured fields (price, author, date). Works on anti-bot pages automatically.
 **Not for:** URL discovery (novada_map), multi-page crawl (novada_crawl), platform data like Amazon/LinkedIn (novada_scrape is richer).
-**Key rule:** Leave render="auto" (default). Only set render="render" for known JS-heavy SPAs. Auto mode is 15-100x faster on static sites.`,
+**Key rule:** Leave render="auto" (default). Only set render="render" for known JS-heavy SPAs. Auto mode is 15-100x faster on static sites.
+By default returns full page content for maximum information. Add clean=true to extract only the main article body (strips nav/footer/ads).`,
     inputSchema: zodToMcpSchema(ExtractParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
   },
@@ -211,7 +215,7 @@ Not for:
   },
   {
     name: "novada_scrape",
-    description: `Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 129 platforms: Amazon, Reddit, TikTok, LinkedIn, Google Shopping, Glassdoor, GitHub, Zillow, Airbnb, and more.
+    description: `Use when you need structured data from a specific platform — not raw HTML, but clean tabular records. Supports 13 platforms (~78 operations): Amazon, Reddit, TikTok, LinkedIn, Google Shopping, Glassdoor, GitHub, Zillow, Airbnb, and more.
 
 **Best for:** E-commerce product data, social posts/comments, job listings, reviews, real estate, market data.
 **Not for:** General web pages (use novada_extract), unknown domains not in the platform list (use novada_crawl).
@@ -330,7 +334,6 @@ Not for:
 **Not for:** Reading cleaned text (use novada_extract with render="render"), structured platform data (use novada_scrape).
 **Methods:** "render" (Web Unblocker, faster/cheaper), "browser" (full Chromium CDP, handles complex SPAs).
 **Wait hint:** Use wait_for to specify a CSS selector to wait for before capturing HTML.
-**Note:** wait_ms, block_resources, auto_runs are accepted but not yet implemented — they have no effect in the current version.
 
 Common mistakes:
 - This tool returns RAW HTML, not parsed/cleaned text. Passing the output directly to an LLM expecting markdown will produce garbled, token-heavy responses.
@@ -343,7 +346,8 @@ When to use:
 - You need raw access to a page's complete HTML before novada_extract's content selection.
 
 Not for:
-- Getting readable content from protected pages — use novada_extract with render='render'.`,
+- Getting readable content from protected pages — use novada_extract with render='render'.
+**Auth:** Uses NOVADA_API_KEY (the single key for all Novada products) — no separate key needed. NOVADA_WEB_UNBLOCKER_KEY is an optional override; NOVADA_API_KEY is used as fallback if it is not set.`,
     inputSchema: zodToMcpSchema(UnblockParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
   },
@@ -378,7 +382,8 @@ Not for:
 **Returns:** Per-product table — product | status | latency | notes — covering Search, Extract, Scraper, Proxy, Browser, and Unblock APIs.
 **Degraded mode:** If one product probe fails, all others still return — never hard-fails.
 **Activation links:** Any PRODUCT_UNAVAILABLE result includes a direct link to activate that product on your dashboard.
-**Difference from novada_health:** This tool tests 6 products (vs 5), includes the Unblock API probe, and provides richer notes per product.`,
+**Difference from novada_health:** This tool tests 6 products (vs 5), includes the Unblock API probe, and provides richer notes per product.
+**Auth:** NOVADA_API_KEY (the single key for all Novada products). NOVADA_WEB_UNBLOCKER_KEY is OPTIONAL — NOVADA_API_KEY is used as fallback if it is not set.`,
     inputSchema: zodToMcpSchema(HealthAllParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
@@ -391,7 +396,7 @@ Not for:
 **Filter:** Pass category to narrow to a specific group (e.g. category="Proxy" to see all proxy tools).
 **Status legend:** active = available now; todo = planned but not yet implemented.
 
-**KEY FACT: ONE API KEY COVERS ALL PRODUCTS.** NOVADA_API_KEY authenticates search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning. No separate keys needed for most features. If a tool fails, call novada_health_all() to diagnose.`,
+**KEY FACT: ONE API KEY COVERS ALL PRODUCTS.** NOVADA_API_KEY authenticates search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning. No separate keys needed for any product. NOVADA_BROWSER_WS and NOVADA_PROXY_ENDPOINT unlock additional capabilities but require no extra API key. If a tool fails, call novada_health_all() to diagnose.`,
     inputSchema: zodToMcpSchema(DiscoverParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
@@ -404,7 +409,7 @@ Not for:
 **Required:** url (the page to scrape). Optional: scraper_type (default 'universal'), country (2-letter ISO code).
 **Next step:** After calling this tool, use novada_scraper_status with the returned task_id to check progress.
 **Note:** If the endpoint returns a placeholder task_id, contact Novada support at support@novada.com to confirm scraper_type availability.
-**Alternative:** For 129 supported platforms (Amazon, Reddit, TikTok), use novada_scrape instead — it's synchronous and returns results directly.`,
+**Alternative:** For 13 active platforms (Amazon, Reddit, TikTok), use novada_scrape instead — it's synchronous and returns results directly.`,
     inputSchema: zodToMcpSchema(ScraperSubmitParamsSchema),
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true },
   },
@@ -473,7 +478,7 @@ Not for:
 **Output:** Status of all env vars (NOVADA_API_KEY, NOVADA_BROWSER_WS, NOVADA_PROXY_*), setup commands for all MCP clients, and which tools are currently active.
 **No auth required:** This tool works even when NOVADA_API_KEY is not set.
 
-**UNIFIED KEY:** NOVADA_API_KEY is the only required key. It covers search, extract, research, crawl, scrape, unblock, and proxy auto-provisioning. NOVADA_BROWSER_WS and NOVADA_PROXY_ENDPOINT unlock additional capabilities but are optional.`,
+**UNIFIED KEY:** NOVADA_API_KEY is the only required key. It covers: Search, Extract, Web Unblocker, Scraper API, Research, Crawl, Map, Browser API HTTP management, Proxy management and auto-provisioning. NOVADA_BROWSER_WS (Browser WebSocket) and NOVADA_PROXY_ENDPOINT unlock additional capabilities but require no separate API key — NOVADA_API_KEY authenticates them all.`,
     inputSchema: zodToMcpSchema(SetupParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
@@ -567,6 +572,16 @@ Not for:
     inputSchema: zodToMcpSchema(AccountSummaryParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
   },
+  {
+    name: "novada_ip_whitelist",
+    description: `Manage IP whitelist for proxy products. Supports add/list/delete/remark for Residential (1), Unlimited (4), and Static ISP (5) products.
+
+**Actions:** "add" (WRITE — requires confirm), "list" (read-only), "del" (WRITE — requires confirm), "remark" (update note on entry).
+**Required:** action, product (1=Residential, 4=Unlimited, 5=Static ISP).
+**Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
+    inputSchema: zodToMcpSchema(IpWhitelistParamsSchema),
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: false },
+  },
 ];
 
 // ─── Tool & Group Filtering ──────────────────────────────────────────────────
@@ -581,7 +596,7 @@ const CATEGORY_MAP: Record<string, string[]> = {
   browser: ["novada_browser", "novada_browser_flow"],
   scraper: ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"],
   health:  ["novada_health", "novada_health_all", "novada_discover", "novada_setup"],
-  account: ["novada_wallet_balance", "novada_wallet_usage_record", "novada_proxy_account_create", "novada_proxy_account_list", "novada_traffic_daily", "novada_plan_balance_all", "novada_capture_logs", "novada_account_summary"],
+  account: ["novada_wallet_balance", "novada_wallet_usage_record", "novada_proxy_account_create", "novada_proxy_account_list", "novada_traffic_daily", "novada_plan_balance_all", "novada_capture_logs", "novada_account_summary", "novada_ip_whitelist"],
 };
 
 /** Normalize short name → full tool name */
@@ -712,6 +727,7 @@ class NovadaMCPServer {
         "novada_plan_balance_all",
         "novada_capture_logs",
         "novada_account_summary",
+        "novada_ip_whitelist",
       ]);
       const hasDeveloperKey = !!process.env.NOVADA_DEVELOPER_API_KEY?.trim();
       const isKr6Bypass = KR6_TOOLS.has(name) && hasDeveloperKey;
@@ -848,11 +864,14 @@ class NovadaMCPServer {
           case "novada_account_summary":
             result = await novadaAccountSummary(validateAccountSummaryParams(args as Record<string, unknown>));
             break;
+          case "novada_ip_whitelist":
+            result = await novadaIpWhitelist(validateIpWhitelistParams(args as Record<string, unknown>));
+            break;
           default:
             return {
               content: [{
                 type: "text" as const,
-                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_unblock, novada_browser, novada_health, novada_health_all, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_setup, novada_wallet_balance, novada_wallet_usage_record, novada_proxy_account_create, novada_proxy_account_list, novada_traffic_daily, novada_plan_balance_all, novada_capture_logs`,
+                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_unblock, novada_browser, novada_health, novada_health_all, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_setup, novada_wallet_balance, novada_wallet_usage_record, novada_proxy_account_create, novada_proxy_account_list, novada_traffic_daily, novada_plan_balance_all, novada_capture_logs, novada_ip_whitelist`,
               }],
               isError: true,
             };
@@ -960,7 +979,7 @@ Tools (${TOOLS.length}):
   novada_crawl               Crawl a website (BFS/DFS, up to 20 pages)
   novada_research            Multi-step web research with synthesis
   novada_map                 Discover all URLs on a website (fast)
-  novada_scrape              Structured data from 129 platforms (Amazon, TikTok, etc.)
+  novada_scrape              Structured data from 13 active platforms (~78 operations, e.g. Amazon, TikTok)
   novada_proxy               Get residential proxy credentials (legacy)
   novada_verify              Verify a factual claim against web sources
   novada_unblock             Force JS rendering on blocked/SPA pages
@@ -978,6 +997,7 @@ Tools (${TOOLS.length}):
   novada_scraper_status      Poll async scraping task status by task_id
   novada_scraper_result      Retrieve completed scraping results by task_id
   novada_browser_flow        Cloud browser automation via action sequence API
+  novada_ip_whitelist        Manage IP whitelist for proxy products (add/list/del/remark)
 `);
   process.exit(0);
 }

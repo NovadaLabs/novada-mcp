@@ -3,11 +3,15 @@ import * as cheerio from "cheerio";
 import https from "https";
 import { USER_AGENT, cleanParams, rerankResults } from "../utils/index.js";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
+import { saveOutput } from "../utils/output.js";
 import type { SearchParams, NovadaApiResponse, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
-import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
+import { makeNovadaError, NovadaErrorCode, sanitizeServerMsg } from "../_core/errors.js";
 
 const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
+
+const _searchCache = new Map<string, { result: string; ts: number }>();
+const SEARCH_CACHE_TTL = 60_000;
 
 const SCRAPER_SEARCH_ENGINES = new Set(["google", "bing", "duckduckgo", "yandex"]);
 
@@ -120,6 +124,14 @@ async function submitBingSearch(apiKey: string, query: string): Promise<NovadaSe
   return [];
 }
 
+interface SearchFilterParams {
+  time_range?: string;
+  start_date?: string;
+  end_date?: string;
+  country?: string;
+  language?: string;
+}
+
 /** Submit a search task via the Scraper API and return the task_id. */
 export async function submitSearchScrapeTask(
   apiKey: string,
@@ -128,7 +140,8 @@ export async function submitSearchScrapeTask(
   query: string,
   num: number,
   queryParam = "q",
-  supportsNum = true
+  supportsNum = true,
+  filterParams: SearchFilterParams = {}
 ): Promise<string> {
   const form = new URLSearchParams();
   form.append("scraper_name", scraperName);
@@ -142,6 +155,11 @@ export async function submitSearchScrapeTask(
   if (scraperName === "bing.com") {
     form.append("safe", "off");
   }
+  if (filterParams.time_range) form.append("time_range", filterParams.time_range);
+  if (filterParams.start_date) form.append("start_date", filterParams.start_date);
+  if (filterParams.end_date) form.append("end_date", filterParams.end_date);
+  if (filterParams.country) form.append("country", filterParams.country);
+  if (filterParams.language) form.append("language", filterParams.language);
 
   const resp = await axios.post(`${SCRAPER_API_BASE}/request`, form, {
     headers: {
@@ -153,8 +171,17 @@ export async function submitSearchScrapeTask(
   });
 
   const body = resp.data as { code: number; msg?: string; data: unknown };
+
+  // Auth error codes returned as HTTP 200 with non-zero body code
+  if (body.code === 50001 || body.code === 50002 || body.code === 50003) {
+    throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, `Scraper API auth error (code: ${body.code})`);
+  }
+  if (body.code === 500) {
+    throw makeNovadaError(NovadaErrorCode.API_DOWN, `Scraper API server error`);
+  }
+
   if (body.code !== 0) {
-    throw new Error(`Scraper search submit error (code ${body.code}): ${body.msg ?? "unknown"}`);
+    throw new Error(`Scraper search submit error (code ${body.code}): ${sanitizeServerMsg(body.msg ?? "unknown")}`);
   }
 
   const inner = body.data as Record<string, unknown> | null;
@@ -173,6 +200,9 @@ export async function pollSearchResult(apiKey: string, taskId: string): Promise<
   const url = `${SCRAPER_DOWNLOAD_BASE}/scraper_download?task_id=${encodeURIComponent(taskId)}&file_type=json&apikey=${encodeURIComponent(apiKey)}`;
   const deadline = Date.now() + 90_000;
   let pollAttempt = 0;
+
+  // Give backend ~300ms to start the task before first poll
+  await new Promise(r => setTimeout(r, 300));
 
   while (Date.now() < deadline) {
     const resp = await axios.get(url, { timeout: 30000, httpsAgent: keepAliveAgent });
@@ -271,6 +301,12 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     return YAHOO_UNAVAILABLE;
   }
 
+  const cacheKey = `${engine}:${params.query}:${params.num ?? 10}`;
+  const cached = _searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < SEARCH_CACHE_TTL) {
+    return cached.result;
+  }
+
   const rawParams: Record<string, string> = {
     q: params.query,
     api_key: apiKey,
@@ -336,7 +372,14 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
         effectiveQuery,
         params.num || 10,
         engineCfg.query_param,
-        engineCfg.supports_num
+        engineCfg.supports_num,
+        {
+          time_range: params.time_range,
+          start_date: params.start_date,
+          end_date: params.end_date,
+          country: params.country || undefined,
+          language: params.language || undefined,
+        }
       );
       const resultData = await pollSearchResult(apiKey, taskId);
       scraperResults = parseScraperSearchResults(resultData);
@@ -355,7 +398,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
 
   const results: NovadaSearchResult[] = scraperResults;
   if (results.length === 0) {
-    return [
+    const emptyResult = [
       `## Search Results`,
       `results:0 | engine:${engine}`,
       ``,
@@ -367,6 +410,13 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
       `- Use novada_research for multi-source investigation`,
       `- Use novada_map + novada_extract if you have a known site`,
     ].join("\n");
+    // Cache empty results too so repeated calls don't re-poll the API
+    _searchCache.set(cacheKey, { result: emptyResult, ts: Date.now() });
+    if (_searchCache.size > 100) {
+      const oldest = [..._searchCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
+      _searchCache.delete(oldest[0]);
+    }
+    return emptyResult;
   }
 
   // Rerank by relevance to query
@@ -437,7 +487,25 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
       }),
       agent_instruction: "Search complete. Call novada_extract with results[0].url to read the full page. Call novada_research for deeper multi-source investigation.",
     };
-    return JSON.stringify(jsonResult, null, 2);
+    let finalResult = JSON.stringify(jsonResult, null, 2);
+
+    // Wire output save — best-effort, never breaks the tool
+    try {
+      const outputResult = await saveOutput({
+        tool: "search",
+        hint: params.query?.slice(0, 30) || "search",
+        format: "json",
+        data: { query: params.query, engine: params.engine, results: reranked },
+      });
+      finalResult += `\n\n// Output saved: ${outputResult.filePath}`;
+    } catch { /* best-effort */ }
+
+    _searchCache.set(cacheKey, { result: finalResult, ts: Date.now() });
+    if (_searchCache.size > 100) {
+      const oldest = [..._searchCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
+      _searchCache.delete(oldest[0]);
+    }
+    return finalResult;
   }
 
   // Active filters summary for agent metadata
@@ -512,7 +580,25 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
   const topUrl = topResult?.url || topResult?.link || "N/A";
   lines.push(`remember: Top result for '${params.query}': ${topTitle} — ${topUrl}`);
 
-  return lines.join("\n");
+  let finalResult = lines.join("\n");
+
+  // Wire output save — best-effort, never breaks the tool
+  try {
+    const outputResult = await saveOutput({
+      tool: "search",
+      hint: params.query?.slice(0, 30) || "search",
+      format: "json",
+      data: { query: params.query, engine: params.engine, results: reranked },
+    });
+    finalResult += `\n\nOutput saved: ${outputResult.filePath}`;
+  } catch { /* best-effort */ }
+
+  _searchCache.set(cacheKey, { result: finalResult, ts: Date.now() });
+  if (_searchCache.size > 100) {
+    const oldest = [..._searchCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
+    _searchCache.delete(oldest[0]);
+  }
+  return finalResult;
 }
 
 /** Unwrap Bing redirect/base64 encoded URLs */

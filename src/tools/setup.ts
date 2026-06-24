@@ -13,10 +13,13 @@ export function validateSetupParams(raw: Record<string, unknown>): SetupParams {
  */
 export function novadaSetup(_params: SetupParams): string {
   const apiKey   = process.env.NOVADA_API_KEY?.trim();
+  const devApiKey = process.env.NOVADA_DEVELOPER_API_KEY?.trim();
   const browserWs = process.env.NOVADA_BROWSER_WS?.trim();
   const proxyUser = process.env.NOVADA_PROXY_USER?.trim();
   const proxyPass = process.env.NOVADA_PROXY_PASS?.trim();
   const proxyEndpoint = process.env.NOVADA_PROXY_ENDPOINT?.trim();
+  // INC-194: The key that actual API calls use — matches getDeveloperApiKey() priority
+  const effectiveKey = devApiKey ?? apiKey;
 
   const proxyConfigured = !!(proxyUser && proxyPass && proxyEndpoint);
   const allCoreReady = !!apiKey;
@@ -40,6 +43,11 @@ export function novadaSetup(_params: SetupParams): string {
   lines.push(check("NOVADA_API_KEY", apiKey, apiKey
     ? "covers search, extract, crawl, research, scrape, monitor, verify, unblock"
     : "REQUIRED — get at https://www.novada.com"));
+  // INC-194: Show NOVADA_DEVELOPER_API_KEY if set and different from NOVADA_API_KEY
+  if (devApiKey && devApiKey !== apiKey) {
+    lines.push(check("NOVADA_DEVELOPER_API_KEY", devApiKey, "used for account-management tools (wallet, traffic, proxy_account)"));
+    lines.push(`  ⚠ API calls use NOVADA_DEVELOPER_API_KEY (effective key: ${devApiKey.slice(0, 4)}...${devApiKey.slice(-4)}), not NOVADA_API_KEY`);
+  }
   lines.push(check("NOVADA_BROWSER_WS", browserWs, browserWs
     ? "enables novada_browser and novada_browser_flow"
     : "optional — needed for novada_browser / novada_browser_flow"));

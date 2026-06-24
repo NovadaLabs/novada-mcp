@@ -94,7 +94,7 @@ export function validateProxyAccountCreateParams(
  */
 export async function novadaProxyAccountCreate(
   params: ProxyAccountCreateParams,
-  _apiKey?: string,
+  apiKey?: string,
 ): Promise<string> {
   if (params.confirm !== true) {
     return JSON.stringify(
@@ -127,7 +127,7 @@ export async function novadaProxyAccountCreate(
     ...(params.limit_flow !== undefined ? { limit_flow: params.limit_flow } : {}),
   };
 
-  const data = await devApiPost<unknown>("/v1/proxy_account/create", body);
+  const data = await devApiPost<unknown>("/v1/proxy_account/create", body, { apiKey });
 
   return JSON.stringify(
     {

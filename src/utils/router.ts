@@ -2,6 +2,7 @@ import { fetchViaProxy, fetchWithRender, detectJsHeavyContent, detectBotChalleng
 import { fetchViaBrowser, isBrowserConfigured } from "./browser.js";
 import { isPdfResponse, extractPdf } from "./pdf.js";
 import { getWebUnblockerKey } from "./credentials.js";
+import { lookupDomain } from "./domains.js";
 
 /**
  * Normalize axios response data to a string.
@@ -65,6 +66,20 @@ export async function routeFetch(
   const timeout = options.timeout ?? 30000;
   const country = options.country;
 
+  // INC-171: Check DOMAIN_REGISTRY first — known domains skip the probe chain entirely
+  if (renderMode === "auto") {
+    const domainHint = lookupDomain(url);
+    if (domainHint?.method === "browser") {
+      const html = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector, wait_ms: options.wait_ms });
+      return { html, mode: "browser", cost: "high" };
+    }
+    if (domainHint?.method === "render") {
+      const response = await fetchWithRender(url, options.apiKey, { country });
+      return { html: normalizeToString(response.data), mode: "render", cost: "medium" };
+    }
+    // domainHint?.method === "static" or no hint — fall through to normal auto chain
+  }
+
   // Force browser mode
   if (renderMode === "browser") {
     const html = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector, wait_ms: options.wait_ms });
@@ -127,6 +142,9 @@ export async function routeFetch(
   }
 
   // Auto mode: static -> render -> browser
+  // INC-175: track browser fallback errors so they surface in the final failure message
+  let lastBrowserError: Error | undefined;
+
   const response = await fetchViaProxy(url, options.apiKey);
   // Check for PDF before attempting HTML processing
   const autoContentType = String((response.headers as Record<string, string>)?.["content-type"] ?? "");
@@ -157,11 +175,13 @@ export async function routeFetch(
         try {
           const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector, wait_ms: options.wait_ms });
           return { html: browserHtml, mode: "browser", cost: "high" };
-        } catch {
-          // Browser unavailable — fall through to render-failed
+        } catch (err) {
+          lastBrowserError = err as Error;
+          // Browser failed — fall through to render-failed
         }
       }
-      return { html, mode: "render-failed", cost: "low" };
+      const detail = lastBrowserError ? ` (browser also tried and failed: ${lastBrowserError.message})` : "";
+      return { html: `render-failed: bot challenge detected${detail}\n\n${html}`, mode: "render-failed", cost: "low" };
     }
     if (!detectJsHeavyContent(renderHtml)) {
       return { html: renderHtml, mode: "render", cost: "medium" };
@@ -172,26 +192,34 @@ export async function routeFetch(
       try {
         const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector, wait_ms: options.wait_ms });
         return { html: browserHtml, mode: "browser", cost: "high" };
-      } catch {
-        // Browser unavailable — fall through to render result
+      } catch (err) {
+        lastBrowserError = err as Error;
+        // Browser failed — fall through to render result
       }
     }
 
     // No browser or browser failed — return render result (better than static)
     return { html: renderHtml, mode: "render", cost: "medium" };
-  } catch {
+  } catch (renderErr) {
     // Render failed — try browser as last resort
     if (isBrowserConfigured()) {
       try {
         const browserHtml = await fetchViaBrowser(url, { timeout, waitForSelector: options.waitForSelector, wait_ms: options.wait_ms });
         return { html: browserHtml, mode: "browser", cost: "high" };
-      } catch {
-        // Browser also unavailable — fall back to static
+      } catch (err) {
+        lastBrowserError = err as Error;
+        // Browser also failed — fall back to static
       }
     }
 
     // Nothing worked — return the static HTML with a flag
-    return { html, mode: "render-failed", cost: "low" };
+    const renderErrMsg = renderErr instanceof Error ? renderErr.message : String(renderErr);
+    const browserErrMsg = lastBrowserError ? `; browser also tried and failed: ${lastBrowserError.message}` : "";
+    return {
+      html: `render-failed: ${renderErrMsg}${browserErrMsg}\n\n${html}`,
+      mode: "render-failed",
+      cost: "low",
+    };
   }
 }
 

@@ -4,7 +4,7 @@ import { detectJsHeavyContent } from "./http.js";
 /** Elements to completely remove before content extraction */
 const REMOVE_TAGS = [
   "script", "style", "noscript", "svg", "iframe", "nav", "footer",
-  "header", "aside", "form",
+  "aside",
 ];
 
 /** CSS selectors for boilerplate regions to remove */
@@ -86,6 +86,24 @@ export function extractMainContent(html: string, baseUrl?: string, maxChars = 25
     $(tag).remove();
   }
 
+  // Fix 5: Conditional <header> removal — only remove site headers (contain nav or logo),
+  // keep article headers (e.g. <header> wrapping an article's byline)
+  $('header').each((_, el) => {
+    const $el = $(el);
+    if ($el.find('nav').length > 0 || $el.find('[class*="logo"], [class*="brand"]').length > 0) {
+      $el.remove();
+    }
+  });
+
+  // Fix 2: Conditional <form> removal — only remove forms with high link density or very little text
+  $('form').each((_, el) => {
+    const $el = $(el);
+    const text = $el.text().trim();
+    const links = $el.find('a').length;
+    const density = links / Math.max(text.length, 1);
+    if (density > 0.3 || text.length < 50) $el.remove();
+  });
+
   // Remove comments
   $("*").contents().filter(function () {
     return this.type === "comment";
@@ -97,6 +115,11 @@ export function extractMainContent(html: string, baseUrl?: string, maxChars = 25
   for (const selector of CONTENT_SELECTORS) {
     const $el = $(selector).first();
     if ($el.length && ($el.text() || "").trim().length > 200) {
+      // Fix 1: Strip nav/sidebar/header elements nested inside semantic containers
+      // (e.g. <nav> inside <main>, sidebar inside <article>)
+      $el.find('nav, [class*="sidebar"], [class*="nav"], [role="navigation"], [class*="menu"]').remove();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      $el.find('header').filter((_: number, el: any) => $(el).find('nav, [class*="logo"]').length > 0).remove();
       $content = $el;
       break;
     }
@@ -138,6 +161,14 @@ export function extractMainContent(html: string, baseUrl?: string, maxChars = 25
   // Convert to markdown-like text
   const lines: string[] = [];
 
+  /** Fix 7: Escape markdown special characters in plain text nodes */
+  function escapeMarkdown(text: string): string {
+    return text
+      .replace(/\\/g, '\\\\')
+      .replace(/\*/g, '\\*')
+      .replace(/_/g, '\\_');
+  }
+
   /** Render an element's inline content as markdown, preserving links/emphasis */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function inlineMarkdown($el: any, baseUrl?: string): string {
@@ -145,7 +176,8 @@ export function extractMainContent(html: string, baseUrl?: string, maxChars = 25
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     $el.contents().each((_: number, node: any) => {
       if (node.type === "text") {
-        md += (node.data || "").replace(/\s+/g, " ");
+        // Fix 7: Escape markdown special chars in plain text (not in code/URLs)
+        md += escapeMarkdown((node.data || "").replace(/\s+/g, " "));
       } else if (node.type === "tag") {
         const tag = (node.tagName || "").toLowerCase();
         const $node = $(node);
@@ -160,6 +192,13 @@ export function extractMainContent(html: string, baseUrl?: string, maxChars = 25
           md += inner.trim() ? `*${inner.trim()}*` : inner;
         } else if (tag === "code") {
           md += inner.trim() ? `\`${inner.trim()}\`` : inner;
+        } else if (tag === "img") {
+          // Fix 6: Render <img> as markdown image, skip base64 data URIs
+          const alt = $node.attr("alt") ?? "";
+          const src = $node.attr("src") ?? "";
+          if (src && !src.startsWith("data:")) {
+            md += `![${alt}](${src})`;
+          }
         } else {
           md += inner;
         }
@@ -185,11 +224,21 @@ export function extractMainContent(html: string, baseUrl?: string, maxChars = 25
       const level = parseInt(tag[1]);
       lines.push(`\n${"#".repeat(level)} ${text}\n`);
     } else if (tag === "li") {
-      lines.push(`- ${inlineMarkdown($el, baseUrl).replace(/\s+/g, " ").trim()}`);
+      // Fix 3: Detect ordered list parent for numbered list items
+      const isOrdered = $el.parent().is('ol');
+      const index = isOrdered ? $el.index() + 1 : null;
+      const prefix = isOrdered ? `${index}. ` : '- ';
+      lines.push(`${prefix}${inlineMarkdown($el, baseUrl).replace(/\s+/g, " ").trim()}`);
     } else if (tag === "blockquote") {
       lines.push(`> ${text}`);
     } else if (tag === "pre") {
-      lines.push(`\`\`\`\n${text}\n\`\`\``);
+      // Fix 4: Extract language hint from <code class="language-xxx"> inside <pre>
+      const $codeEl = $el.find('code').first();
+      const lang = $codeEl.length
+        ? ($codeEl.attr('class')?.match(/(?:language|lang)-(\w+)/)?.[1] ?? '')
+        : '';
+      const codeText = $codeEl.length ? $codeEl.text() : text;
+      lines.push(`\`\`\`${lang}\n${codeText}\n\`\`\``);
     } else {
       // p, dt, dd — preserve inline formatting
       lines.push(inlineMarkdown($el, baseUrl).replace(/\s+/g, " ").trim());
@@ -286,6 +335,186 @@ export function extractMainContent(html: string, baseUrl?: string, maxChars = 25
   // Truncate at the last double-newline (paragraph boundary) before the limit
   const boundary = result.lastIndexOf("\n\n", maxChars);
   return (boundary > maxChars * 0.8 ? result.slice(0, boundary) : result.slice(0, maxChars)).trim();
+}
+
+/**
+ * Extract full page content from HTML — keeps nav, header, footer, aside, form.
+ * Only removes non-renderable tags: script, style, noscript, iframe, svg, canvas.
+ * Uses the same inlineMarkdown walker as extractMainContent.
+ * Target output: 50,000–100,000 chars.
+ */
+export function extractFullPageContent(html: string, baseUrl?: string): string {
+  if (!html || !html.trim()) return "";
+
+  const $ = cheerio.load(html);
+
+  // Remove only non-renderable tags
+  $('script, style, noscript, iframe, svg, canvas').remove();
+
+  // Remove HTML comments
+  $("*").contents().filter(function () {
+    return this.type === "comment";
+  }).remove();
+
+  const $body = $("body");
+  if (!$body.length) return "";
+
+  /** Escape markdown special characters in plain text nodes */
+  function escapeMarkdown(text: string): string {
+    return text
+      .replace(/\\/g, '\\\\')
+      .replace(/\*/g, '\\*')
+      .replace(/_/g, '\\_');
+  }
+
+  /** Render an element's inline content as markdown, preserving links/emphasis */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function inlineMarkdown($el: any, base?: string): string {
+    let md = "";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    $el.contents().each((_: number, node: any) => {
+      if (node.type === "text") {
+        md += escapeMarkdown((node.data || "").replace(/\s+/g, " "));
+      } else if (node.type === "tag") {
+        const tag = (node.tagName || "").toLowerCase();
+        const $node = $(node);
+        const inner = inlineMarkdown($node, base);
+        if (tag === "a") {
+          const href = $node.attr("href");
+          let resolved: string | null = null;
+          if (href && !href.startsWith("#") && !href.startsWith("javascript:") && !href.startsWith("mailto:")) {
+            if (href.startsWith("//")) resolved = `https:${href}`;
+            else if (base && !href.startsWith("http")) {
+              try { resolved = new URL(href, base).href; } catch { /* ignore */ }
+            } else if (href.startsWith("http")) {
+              resolved = href;
+            }
+          }
+          md += resolved && inner.trim() ? `[${inner.trim()}](${resolved})` : inner;
+        } else if (tag === "strong" || tag === "b") {
+          md += inner.trim() ? `**${inner.trim()}**` : inner;
+        } else if (tag === "em" || tag === "i") {
+          md += inner.trim() ? `*${inner.trim()}*` : inner;
+        } else if (tag === "code") {
+          md += inner.trim() ? `\`${inner.trim()}\`` : inner;
+        } else if (tag === "img") {
+          const alt = $node.attr("alt") ?? "";
+          const src = $node.attr("src") ?? "";
+          if (src && !src.startsWith("data:")) {
+            md += `![${alt}](${src})`;
+          }
+        } else {
+          md += inner;
+        }
+      }
+    });
+    return md;
+  }
+
+  const lines: string[] = [];
+
+  // Walk all block-level elements in document order
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  $body.find("h1, h2, h3, h4, h5, h6, p, li, blockquote, pre, dt, dd").filter((_: number, el: any) => {
+    return $(el).parents("table").length === 0 || ["dt", "dd"].includes((el.tagName || "").toLowerCase());
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  }).each((_: number, el: any) => {
+    const $el = $(el);
+    const tag = (el.tagName || "").toLowerCase();
+    const text = tag === "pre"
+      ? $el.text()
+      : $el.text().replace(/\s+/g, " ").trim();
+    if (!text) return;
+
+    if (tag.match(/^h[1-6]$/)) {
+      const level = parseInt(tag[1]);
+      lines.push(`\n${"#".repeat(level)} ${text}\n`);
+    } else if (tag === "li") {
+      const isOrdered = $el.parent().is('ol');
+      const index = isOrdered ? $el.index() + 1 : null;
+      const prefix = isOrdered ? `${index}. ` : '- ';
+      lines.push(`${prefix}${inlineMarkdown($el, baseUrl).replace(/\s+/g, " ").trim()}`);
+    } else if (tag === "blockquote") {
+      lines.push(`> ${text}`);
+    } else if (tag === "pre") {
+      const $codeEl = $el.find('code').first();
+      const lang = $codeEl.length
+        ? ($codeEl.attr('class')?.match(/(?:language|lang)-(\w+)/)?.[1] ?? '')
+        : '';
+      const codeText = $codeEl.length ? $codeEl.text() : text;
+      lines.push(`\`\`\`${lang}\n${codeText}\n\`\`\``);
+    } else {
+      lines.push(inlineMarkdown($el, baseUrl).replace(/\s+/g, " ").trim());
+    }
+  });
+
+  // Handle tables
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  $body.find("table").each((_: number, table: any) => {
+    const $table = $(table);
+
+    const hasHeaders = $table.children("thead").children("tr").children("th").length > 0
+      || $table.children("tr").children("th").length > 0
+      || $table.children("tbody").children("tr").children("th").length > 0;
+
+    if ($table.parents("table").length > 0) {
+      if (!hasHeaders) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const nestedInDataTable = $table.parents("table").filter((__: number, t: any) =>
+        $(t).children("thead").children("tr").children("th").length > 0 ||
+        $(t).children("tr").children("th").length > 0 ||
+        $(t).children("tbody").children("tr").children("th").length > 0
+      ).length > 0;
+      if (nestedInDataTable) return;
+    }
+
+    const rows: string[][] = [];
+    const $directRows = $table.children("tbody, thead, tfoot").children("tr")
+      .add($table.children("tr"));
+    $directRows.each((__, tr) => {
+      const cells: string[] = [];
+      $(tr).children("th, td").each((___, cell) => {
+        const $cell = $(cell);
+        const $nestedTable = $cell.children("table").first();
+        if ($nestedTable.length > 0) {
+          const nestedLines: string[] = [];
+          $nestedTable.find("tr").each((__, nestedTr) => {
+            const rowText = $(nestedTr).children("td, th")
+              .map((_: number, td: unknown) => inlineMarkdown($(td as never), baseUrl).trim())
+              .get()
+              .filter((t: string) => t.length > 0)
+              .join(" ");
+            if (rowText) nestedLines.push(rowText);
+          });
+          if (nestedLines.length > 0) cells.push(nestedLines.join("\n\n"));
+        } else {
+          const text = $cell.text().replace(/\s+/g, " ").trim();
+          if (text) cells.push(text);
+        }
+      });
+      if (cells.length) rows.push(cells);
+    });
+
+    if (!rows.length) return;
+
+    if (hasHeaders) {
+      const header = `| ${rows[0].join(" | ")} |`;
+      const separator = `| ${rows[0].map(() => "---").join(" | ")} |`;
+      const body = rows.slice(1).map(r => `| ${r.join(" | ")} |`).join("\n");
+      lines.push(`\n${header}\n${separator}\n${body}\n`);
+    } else {
+      const textLines = rows
+        .map(cells => cells.join(" — "))
+        .filter(t => t.length > 0);
+      if (textLines.length > 0) {
+        lines.push(`\n${textLines.join("\n\n")}\n`);
+      }
+    }
+  });
+
+  return lines.join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export interface StructuredData {

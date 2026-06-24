@@ -1,6 +1,7 @@
-import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT } from "../utils/index.js";
+import { fetchWithRetry, fetchViaProxy, fetchWithRender, extractMainContent, extractFullPageContent, extractTitle, extractDescription, extractLinks, detectJsHeavyContent, detectBotChallenge, identifyAntiBot, fetchViaBrowser, isBrowserConfigured, extractStructuredData, scoreExtraction, qualityLabel, lookupDomain, extractFields, isPdfResponse, extractPdf, USER_AGENT } from "../utils/index.js";
 import type { FieldResult } from "../utils/index.js";
 import { matchHeadingSectionWithReason } from "../utils/fields.js";
+import { saveOutput } from "../utils/output.js";
 import type { ExtractParams } from "./types.js";
 import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 import { getCached, setCached } from "../_core/session-cache.js";
@@ -365,9 +366,13 @@ async function extractSingleInner(
   }
 
   // For PDF content, use the text directly (no HTML parsing needed)
+  // clean=true → main-content only; clean=false (default) → full page for maximum coverage
+  const useFullPage = params.clean !== true;
   let mainContent = pdfPages !== null
     ? html.slice(0, 25000)
-    : extractMainContent(html, params.url);
+    : useFullPage
+      ? extractFullPageContent(html, params.url)
+      : extractMainContent(html, params.url);
 
   let allLinks = pdfPages !== null ? [] : extractLinks(html, params.url);
   let baseDomain: string;
@@ -385,7 +390,7 @@ async function extractSingleInner(
     .slice(0, 15);
 
   // P0-5: max_chars truncation — applies to ALL formats (text, markdown, html handled separately)
-  const MAX_CHARS_DEFAULT = 50000;
+  const MAX_CHARS_DEFAULT = 100000;
   const maxChars = params.max_chars ?? MAX_CHARS_DEFAULT;
 
   if (params.format === "text") {
@@ -418,12 +423,19 @@ async function extractSingleInner(
   // BUG-E1: Auto-escalation — retry with render when static quality is too low
   let autoEscalated = false;
   let autoEscalatedTo: "render" | "browser" | null = null;
+  // INC-199: Track failed escalation attempts so we can surface them instead of silent failure
+  let escalationAttempted = false;
+  let escalationFailed = false;
+  let escalationError: string | null = null;
   if (renderMode === "auto" && usedMode === "static" && quality.score < 40 && !html.startsWith("pdf_pages:")) {
+    escalationAttempted = true;
     try {
       const renderResponse = await fetchWithRender(params.url, apiKey);
       if (typeof renderResponse.data === "string" && !detectBotChallenge(renderResponse.data)) {
         const renderHtml = renderResponse.data;
-        const renderMain = extractMainContent(renderHtml, params.url);
+        const renderMain = useFullPage
+          ? extractFullPageContent(renderHtml, params.url)
+          : extractMainContent(renderHtml, params.url);
         const renderSD = extractStructuredData(renderHtml);
         const renderQuality = scoreExtraction(renderHtml, renderMain, "render", renderSD !== null);
         if (renderQuality.score > quality.score) {
@@ -450,13 +462,18 @@ async function extractSingleInner(
           antiBotResolved = detectedAntiBot !== null;
         }
       }
-    } catch { /* keep static result */ }
+    } catch (e) {
+      // INC-199: Track render escalation failure
+      escalationError = e instanceof Error ? e.message : String(e);
+    }
 
     // If render escalation didn't improve quality enough, try browser as final fallback
     if (quality.score < 40 && isBrowserConfigured()) {
       try {
         const browserHtml = await fetchViaBrowser(params.url, { waitForSelector: params.wait_for, wait_ms: params.wait_ms });
-        const browserMain = extractMainContent(browserHtml, params.url);
+        const browserMain = useFullPage
+          ? extractFullPageContent(browserHtml, params.url)
+          : extractMainContent(browserHtml, params.url);
         const browserSD = extractStructuredData(browserHtml);
         const browserQuality = scoreExtraction(browserHtml, browserMain, "browser", browserSD !== null);
         if (browserQuality.score > quality.score) {
@@ -484,6 +501,11 @@ async function extractSingleInner(
         }
       } catch { /* keep previous result */ }
     }
+
+    // INC-199: If quality is still low after all escalation attempts, mark as failed
+    if (quality.score < 40 && !autoEscalated) {
+      escalationFailed = true;
+    }
   }
 
   // P2-1: Wayback Machine auto-fallback — when content is very poor, try archive.org
@@ -494,7 +516,9 @@ async function extractSingleInner(
       const wbResponse = await fetchViaProxy(archiveUrl, apiKey);
       if (typeof wbResponse.data === "string" && wbResponse.data.length > 500) {
         const wbHtml = wbResponse.data;
-        const wbMain = extractMainContent(wbHtml, params.url);
+        const wbMain = useFullPage
+          ? extractFullPageContent(wbHtml, params.url)
+          : extractMainContent(wbHtml, params.url);
         if (wbMain.length > mainContent.length) {
           html = wbHtml;
           mainContent = wbMain;
@@ -580,6 +604,7 @@ async function extractSingleInner(
       hints: [] as string[],
       ...(pdfPages !== null ? { pdf: { pages: pdfPages, title: pdfTitle ?? null } } : {}),
       ...(autoEscalated ? { auto_escalated: true, ...(autoEscalatedTo ? { escalated_to: autoEscalatedTo } : {}) } : {}),
+      ...(escalationFailed ? { escalation_attempted: true, escalation_failed: true, ...(escalationError ? { escalation_error: escalationError } : {}) } : {}),
       ...(detectedAntiBot ? { anti_bot: detectedAntiBot, escalated: usedMode, resolved: antiBotResolved } : {}),
       ...(waybackFallback ? { wayback_fallback: true } : {}),
       remember: `${title} at ${params.url} — ${qLabel} quality, ${contentLen} chars`,
@@ -593,6 +618,11 @@ async function extractSingleInner(
       if (extractedHost === "trends24.in") hints.push("[THIRD-PARTY DATA] trends24.in is an independent aggregator, not an official X/Twitter source.");
     } catch { /* ignore */ }
     if (stillJsHeavy) hints.push("Page is JavaScript-rendered. Content may be incomplete. Try render='js' or render='browser'.");
+    // INC-199: Surface escalation failure so agents know quality:0 is not silent
+    if (escalationFailed) {
+      hints.push(`Auto-escalation attempted (render${isBrowserConfigured() ? "+browser" : ""}) but quality remained low (${quality.score}/100). ${escalationError ? `Render error: ${escalationError}` : "The page may require a specialized approach."}`);
+      if (!isBrowserConfigured()) hints.push("Set NOVADA_BROWSER_WS to enable Browser API as a final fallback for JS-heavy pages.");
+    }
     // P2-3: Cross-tool intelligence — suggest better tools when extraction quality is poor
     if (!contentOk && baseDomain) {
       const SCRAPER_PLATFORMS: Record<string, string> = {
@@ -612,8 +642,22 @@ async function extractSingleInner(
     }
     if (isTruncated) hints.push(`Content truncated at ${maxChars} chars (full: ${totalChars}). Pass max_chars=${Math.min(maxChars * 2, 100000)} to get more.`);
     try { hints.push(`Discover more pages: novada_map(url="${new URL(params.url).origin}")`); } catch { /* ignore */ }
+    // Wire output save — best-effort, never breaks the tool.
+    // Add save path INTO the JSON object (not after it) to keep output parseable.
+    try {
+      const domain = new URL(params.url).hostname.replace("www.", "");
+      const outputResult = await saveOutput({
+        tool: "extract",
+        hint: domain,
+        format: "json",
+        data: jsonResult,
+      });
+      (jsonResult as Record<string, unknown>).output_saved = outputResult.filePath;
+    } catch { /* best-effort */ }
+
     const jsonOutput = JSON.stringify(jsonResult, null, 2);
     setCached(params.url, cacheRenderMode, jsonOutput, params.fields);
+
     return jsonOutput;
   }
 
@@ -708,6 +752,13 @@ async function extractSingleInner(
   if (autoEscalated) {
     lines.push(`- Auto-escalated to render mode (static quality score was < 40). Content above was fetched with JS rendering enabled.`);
   }
+  // INC-199: Surface escalation failure in markdown output
+  if (escalationFailed) {
+    lines.push(`- [ESCALATION FAILED] Auto-escalation attempted (render${isBrowserConfigured() ? "+browser" : ""}) but quality remained low (${quality.score}/100).${escalationError ? ` Render error: ${escalationError}` : ""}`);
+    if (!isBrowserConfigured()) {
+      lines.push(`- Set NOVADA_BROWSER_WS to enable Browser API as final fallback for JS-heavy pages.`);
+    }
+  }
   if (hasNoHeadingMatchField) {
     lines.push(`- Some fields were not found via heading-match. For list or aggregated pages (bestseller lists, search results, news feeds), data is embedded as inline list items — parse the body markdown directly. Field extraction works best on single-entity pages (product detail pages, GitHub repos, articles).`);
   }
@@ -788,8 +839,21 @@ async function extractSingleInner(
   lines.push(``);
   lines.push(`## Agent Action`);
   lines.push(`agent_instruction: ${nextActions.join(" | ")}`);
-  const mdOutput = lines.join("\n");
+  let mdOutput = lines.join("\n");
   setCached(params.url, cacheRenderMode, mdOutput, params.fields);
+
+  // Wire output save — best-effort, never breaks the tool
+  try {
+    const domain = new URL(params.url).hostname.replace("www.", "");
+    const outputResult = await saveOutput({
+      tool: "extract",
+      hint: domain,
+      format: "md",
+      data: mdOutput,
+    });
+    mdOutput += `\n\n---\nOutput saved: ${outputResult.filePath}`;
+  } catch { /* best-effort */ }
+
   return mdOutput;
 }
 

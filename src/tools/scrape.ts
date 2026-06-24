@@ -1,6 +1,7 @@
 import axios, { AxiosError } from "axios";
 import { SCRAPER_API_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
 import { formatAsMarkdown } from "../utils/format.js";
+import { saveOutput } from "../utils/output.js";
 import { NovadaError, NovadaErrorCode, makeNovadaError, sanitizeServerMsg } from "../_core/errors.js";
 import type { ScrapeParams, ScrapeParamsFullType } from "./types.js";
 
@@ -33,11 +34,13 @@ export async function submitScrapeTask(
   scraper_id: string,
   params: Record<string, unknown>
 ): Promise<string> {
+  const file_name = `novada_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const form = new URLSearchParams();
   form.append("scraper_name", scraper_name);
   form.append("scraper_id", scraper_id);
   form.append("scraper_errors", "true");
   form.append("is_auto_push", "false");
+  form.append("file_name", file_name);
 
   // Two param formats exist in the Novada Scraper API:
   //   A) Search engines (google, bing, duckduckgo, yandex) — flat form fields + json=1
@@ -77,6 +80,14 @@ export async function submitScrapeTask(
   });
 
   const body = resp.data as SubmitApiResponse;
+
+  // Auth error codes returned as HTTP 200 with non-zero body code
+  if (body.code === 50001 || body.code === 50002 || body.code === 50003) {
+    throw makeNovadaError(NovadaErrorCode.INVALID_API_KEY, `Scraper API auth error (code: ${body.code})`);
+  }
+  if (body.code === 500) {
+    throw makeNovadaError(NovadaErrorCode.API_DOWN, `Scraper API server error`);
+  }
 
   if (body.code !== 0) {
     // H5: throw typed NovadaError for 11006/11008 — no brittle string matching needed at catch site
@@ -159,6 +170,11 @@ async function pollForResult(apiKey: string, taskId: string): Promise<DownloadRe
       }
       if (errCode === 27203) {
         throw new Error(`Scraper task failed (code 27203): Server-side task execution error. ${errMsg}. This is a transient error — retry once.`);
+      }
+      // INC-190: code 10000 = task completed but no collectible data. Surface clearly
+      // instead of falling through to generic "Unexpected download response".
+      if (errCode === 10000) {
+        throw new Error(`Scraper task completed but collected no valid data (code 10000). The target page may have blocked scraping, returned empty content, or the parser failed. Try a different operation or check the target URL. Raw: ${sanitizeServerMsg(errMsg || "result data not exist")}`);
       }
       // Direct result object — Google SERP and similar formats return organic/search_metadata at top level
       if ("organic_results" in bErr || "organic" in bErr || "search_metadata" in bErr) {
@@ -295,13 +311,32 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
     }
     rawRecords = extractRecords((firstAsRecord as { rest: Record<string, unknown> }).rest);
   } else {
-    // Format A: flat array — filter out genuinely failed items (error is a non-empty string)
+    // Format A: flat array — separate successful items from error items
+    const errorItems = resultItems.filter(item => {
+      const err = (item as Record<string, unknown>).error;
+      return typeof err === "string" && err.length > 0;
+    });
     rawRecords = resultItems
       .filter(item => {
         const err = (item as Record<string, unknown>).error;
         return typeof err !== "string" || err.length === 0;
       })
       .map(item => item as unknown as Record<string, unknown>);
+
+    // INC-190: When ALL items have errors, surface the error details instead of
+    // misleading "No records returned". The underlying error_code (e.g. 300 = parse failure)
+    // is the real root cause the agent needs.
+    if (rawRecords.length === 0 && errorItems.length > 0) {
+      const firstErr = errorItems[0] as Record<string, unknown>;
+      const errCode = firstErr.error_code ?? "unknown";
+      const errMsg = firstErr.error ?? "Unknown scraper error";
+      throw new Error(
+        `Scraper collected ${errorItems.length} result(s) but all failed. ` +
+        `error_code: ${errCode} — ${sanitizeServerMsg(String(errMsg))}. ` +
+        `This means the target page was reached but data extraction failed (parser error, empty page, or access blocked). ` +
+        `Try a different operation or verify the target URL is correct.`
+      );
+    }
   }
   const records = rawRecords.slice(0, limit).map(r => flattenRecord(r)) as Record<string, unknown>[];
 
@@ -311,9 +346,10 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
 
   const title = `${platform} — ${operation}`;
 
+  let output: string;
   switch (format) {
     case "json":
-      return [
+      output = [
         `## Scrape Results`,
         `platform: ${platform} | operation: ${operation} | records: ${records.length} | source: live`,
         ``,
@@ -327,6 +363,7 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
         `- For human-readable output: use format='markdown' instead.`,
         `- Read novada://scraper-platforms resource to discover other operations on this platform.`,
       ].join("\n");
+      break;
 
     case "toon": {
       // TOON: headers declared once, then pipe-separated rows — 40-65% token savings vs JSON/markdown
@@ -338,7 +375,7 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
         `HEADERS: ${headers.join(" | ")}`,
         ...records.map(r => headers.map(h => String(r[h] ?? "")).join(" | ")),
       ];
-      return [
+      output = [
         `## Scrape Results`,
         `platform: ${platform} | operation: ${operation} | records: ${records.length} | source: live | format: toon`,
         ``,
@@ -353,6 +390,7 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
         `## Agent Memory`,
         `remember: ${platform}/${operation} — ${records.length} records retrieved`,
       ].join("\n");
+      break;
     }
 
     // M-4: CLI/SDK formats that reach here via ScrapeParamsFullType — render as markdown with a notice
@@ -361,7 +399,7 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
     case "xlsx":
     case "markdown":
     default:
-      return [
+      output = [
         `## Scrape Results`,
         `platform: ${platform} | operation: ${operation} | records: ${records.length} | source: live${records.length >= limit ? ` (limit:${limit})` : ""}`,
         ``,
@@ -383,7 +421,22 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
         `## Agent Memory`,
         `remember: ${platform}/${operation} — ${records.length} records retrieved`,
       ].join("\n");
+      break;
   }
+
+  // Wire output save — best-effort, never breaks the tool
+  try {
+    const domain = platform || "scrape";
+    const outputResult = await saveOutput({
+      tool: "scrape",
+      hint: domain,
+      format: format === "json" ? "json" : "csv",
+      data: rawRecords.slice(0, limit),
+    });
+    output += `\n\n## Output Saved\n${outputResult.summary}`;
+  } catch { /* file save is best-effort */ }
+
+  return output;
   } catch (err: unknown) {
     // H5: use typed NovadaError.code instead of brittle string matching
     if (err instanceof NovadaError && err.code === NovadaErrorCode.PRODUCT_UNAVAILABLE) {

@@ -139,6 +139,16 @@ export async function fetchViaBrowser(
       userAgent:
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     });
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      (window as any).chrome = { runtime: {}, loadTimes: () => ({}) };
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [
+          { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
+          { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
+        ]
+      });
+    });
     const page = await context.newPage();
 
     // Store in session map if session ID provided
@@ -150,6 +160,22 @@ export async function fetchViaBrowser(
       waitUntil: "domcontentloaded",
       timeout,
     });
+
+    // Wait for networkidle, fall back to domcontentloaded on timeout
+    await page.waitForLoadState('networkidle', { timeout: 12000 })
+      .catch(() => page.waitForLoadState('domcontentloaded'));
+
+    // Check for Cloudflare challenge and wait it out
+    const bodyText = await page.content().catch(() => '');
+    if (
+      bodyText.includes('cf-challenge') ||
+      bodyText.includes('cf-turnstile') ||
+      bodyText.includes('Just a moment') ||
+      bodyText.includes('cf_chl_opt')
+    ) {
+      await page.waitForTimeout(6000);
+      await page.waitForLoadState('domcontentloaded').catch(() => {});
+    }
 
     if (options.waitForSelector) {
       await page.waitForSelector(options.waitForSelector, { timeout: 15000 }).catch(() => {

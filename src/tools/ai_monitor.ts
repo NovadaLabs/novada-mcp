@@ -1,4 +1,3 @@
-import { novadaExtract } from "./extract.js";
 import { submitSearchScrapeTask, pollSearchResult, parseScraperSearchResults } from "./search.js";
 import type { NovadaSearchResult } from "./types.js";
 
@@ -89,76 +88,86 @@ export async function novadaAiMonitor(params: AiMonitorParams, apiKey: string): 
   const models = params.models ?? DEFAULT_MODELS;
   const topics = params.topics ?? [];
 
-  const mentions: BrandMention[] = [];
+  // INC-192: Parallelize all model queries instead of sequential.
+  // Also add per-query timeout to prevent hosted (Vercel Edge) timeouts.
+  const PER_QUERY_TIMEOUT_MS = 25_000; // 25s per query — leaves headroom for Edge 30s limit
 
-  // Build search queries per model
+  interface QueryTask {
+    model: string;
+    query: string;
+  }
+
+  // Build all queries upfront
+  const queryTasks: QueryTask[] = [];
   for (const model of models) {
     const domains = MODEL_DOMAINS[model.toLowerCase()];
     const siteFilter = domains ? domains.map(d => `site:${d}`).join(" OR ") : "";
+    // One primary query per model (skip extract for speed on hosted)
+    const query = topics.length > 0
+      ? `"${brand}" ${topics[0]} ${siteFilter}`.trim()
+      : `"${brand}" ${siteFilter}`.trim();
+    queryTasks.push({ model, query });
+  }
 
-    const queries = [
-      `"${brand}" ${siteFilter}`.trim(),
-      ...(topics.length > 0
-        ? topics.map(t => `"${brand}" ${t} ${siteFilter}`.trim())
-        : [`"${brand}" review comparison ${siteFilter}`.trim()]),
-    ];
+  // Run all queries in parallel with per-query timeout
+  async function runSingleQuery(task: QueryTask): Promise<BrandMention> {
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout")), PER_QUERY_TIMEOUT_MS)
+    );
 
-    for (const query of queries) {
-      try {
-        const taskId = await submitSearchScrapeTask(apiKey, "google.com", "google_search", query, 5, "q");
-        const data = await pollSearchResult(apiKey, taskId);
-        const results = parseScraperSearchResults(data);
+    try {
+      const result = await Promise.race([
+        (async () => {
+          const taskId = await submitSearchScrapeTask(apiKey, "google.com", "google_search", task.query, 5, "q");
+          const data = await pollSearchResult(apiKey, taskId);
+          const results = parseScraperSearchResults(data);
 
-        if (results.length === 0) {
-          mentions.push({
-            model,
-            query_used: query,
-            sentiment: "not_found",
-            key_claims: [],
-            competitor_mentions: [],
-            source_url: null,
-            snippet: "No results found for this query.",
-          });
-          continue;
-        }
+          if (results.length === 0) {
+            return {
+              model: task.model,
+              query_used: task.query,
+              sentiment: "not_found" as const,
+              key_claims: [],
+              competitor_mentions: [],
+              source_url: null,
+              snippet: "No results found for this query.",
+            };
+          }
 
-        // Extract top result for deeper analysis
-        const topUrl = results[0].url || results[0].link;
-        let fullText = results[0].description || results[0].snippet || "";
+          const topUrl = results[0].url || results[0].link;
+          // Skip deep extract on hosted to stay within timeout budget
+          const fullText = results[0].description || results[0].snippet || "";
+          const sentiment = classifySentiment(fullText, brand);
+          const claims = extractClaims(fullText, brand);
+          const competitors = extractCompetitorMentions(fullText, brand);
 
-        if (topUrl) {
-          try {
-            const extracted = await novadaExtract({ url: topUrl, format: "markdown", render: "auto", max_chars: 10000 }, apiKey);
-            fullText = extracted;
-          } catch { /* keep snippet */ }
-        }
-
-        const sentiment = classifySentiment(fullText, brand);
-        const claims = extractClaims(fullText, brand);
-        const competitors = extractCompetitorMentions(fullText, brand);
-
-        mentions.push({
-          model,
-          query_used: query,
-          sentiment,
-          key_claims: claims,
-          competitor_mentions: competitors,
-          source_url: topUrl || null,
-          snippet: (results[0].description || results[0].snippet || "").slice(0, 200),
-        });
-      } catch {
-        mentions.push({
-          model,
-          query_used: query,
-          sentiment: "not_found",
-          key_claims: [],
-          competitor_mentions: [],
-          source_url: null,
-          snippet: "Search failed for this query.",
-        });
-      }
+          return {
+            model: task.model,
+            query_used: task.query,
+            sentiment,
+            key_claims: claims,
+            competitor_mentions: competitors,
+            source_url: topUrl || null,
+            snippet: (results[0].description || results[0].snippet || "").slice(0, 200),
+          };
+        })(),
+        timeoutPromise,
+      ]);
+      return result;
+    } catch {
+      return {
+        model: task.model,
+        query_used: task.query,
+        sentiment: "not_found" as const,
+        key_claims: [],
+        competitor_mentions: [],
+        source_url: null,
+        snippet: "Search timed out or failed for this query.",
+      };
     }
   }
+
+  const mentions = await Promise.all(queryTasks.map(t => runSingleQuery(t)));
 
   // Aggregate
   const allCompetitors = [...new Set(mentions.flatMap(m => m.competitor_mentions))];
@@ -177,11 +186,21 @@ export async function novadaAiMonitor(params: AiMonitorParams, apiKey: string): 
   ];
 
   if (foundMentions.length === 0) {
-    lines.push(`No AI model references found for "${brand}". The brand may not be indexed by these AI models yet.`);
-    lines.push(``);
-    lines.push(`## Agent Hints`);
-    lines.push(`- Try broader search terms or different models`);
-    lines.push(`- Check if the brand has a website indexed by search engines first: novada_search("${brand}")`);
+    // INC-192: Distinguish "all searches failed/timed out" from "genuinely no mentions"
+    const failedCount = mentions.filter(m => m.snippet.includes("timed out") || m.snippet.includes("failed")).length;
+    if (failedCount === mentions.length) {
+      lines.push(`**All ${failedCount} searches failed or timed out.** This is a service issue, not a genuine "0 mentions" result.`);
+      lines.push(``);
+      lines.push(`## Agent Hints`);
+      lines.push(`- Search API may be unavailable or rate-limited. Call novada_health to check.`);
+      lines.push(`- On hosted (Vercel Edge), ai_monitor may exceed execution time. Try fewer models or use local MCP server.`);
+    } else {
+      lines.push(`No AI model references found for "${brand}". The brand may not be indexed by these AI models yet.`);
+      lines.push(``);
+      lines.push(`## Agent Hints`);
+      lines.push(`- Try broader search terms or different models`);
+      lines.push(`- Check if the brand has a website indexed by search engines first: novada_search("${brand}")`);
+    }
   } else {
     for (const m of mentions) {
       lines.push(`### ${m.model} — ${m.sentiment}`);

@@ -55,7 +55,7 @@ export async function novadaCaptureApikey(
         action: "get_apikey",
         data,
         agent_instruction:
-          "Current capture API key returned. This key is used for scraper and unblocker API calls on scraperapi.novada.com / webunlocker.novada.com.",
+          "Current capture API key returned. This key is used for scraper and unblocker API calls on scraper.novada.com / webunlocker.novada.com.",
       },
       null,
       2,

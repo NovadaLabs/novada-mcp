@@ -1,8 +1,10 @@
-import axios, { AxiosError } from "axios";
+import { AxiosError } from "axios";
+import axios from "axios";
 import { z } from "zod";
 import { makeNovadaError, NovadaErrorCode, sanitizeServerMsg } from "../_core/errors.js";
 import { TASK_ID_REGEX, TASK_ID_REGEX_MSG } from "./types.js";
 import { SCRAPER_STATUS_BASE, SCRAPER_DOWNLOAD_BASE } from "../config.js";
+import { devApiPost } from "../_core/developer_api.js";
 
 // ─── Schema & Types ──────────────────────────────────────────────────────────
 
@@ -53,9 +55,10 @@ const STATUS_BASE = SCRAPER_STATUS_BASE;
 function normalizeStatus(raw: string | undefined): TaskStatus {
   if (!raw) return "pending";
   const s = raw.toLowerCase();
-  if (s === "complete" || s === "completed" || s === "success" || s === "done") return "complete";
+  if (s === "ready" || s === "complete" || s === "completed" || s === "success" || s === "done") return "complete";
   if (s === "failed" || s === "error" || s === "failure") return "failed";
   if (s === "running" || s === "processing" || s === "in_progress") return "running";
+  if (s === "pending" || s === "waiting") return "pending";
   return "pending";
 }
 
@@ -69,51 +72,52 @@ export async function novadaScraperStatus(
 ): Promise<string> {
   const { task_id } = params;
 
-  // Primary: use download endpoint directly (api-m.novada.com/v1/scraper returns 404)
-  // GET /scraper_download?task_id=...&file_type=json&apikey=...
+  // Primary: POST to correct status endpoint
+  // POST /v1/scraper/task_status — returns { code: 200, data: { task_id, status, ... } }
+  // status values: "Pending" | "Running" | "Ready" | "Failed"
   try {
-    const dlResp = await axios.get(`${SCRAPER_DOWNLOAD_BASE}/scraper_download`, {
-      params: { task_id, file_type: "json", apikey: apiKey },
-      timeout: 15000,
-    });
-    const dlBody = dlResp.data;
-
-    // Complete: array of result items
-    if (Array.isArray(dlBody) && dlBody.length > 0) {
-      return JSON.stringify({
-        status: "complete",
-        task_id,
-        agent_instruction: `Task complete. Call novada_scraper_result with task_id="${task_id}" to retrieve formatted results.`,
-      }, null, 2);
+    interface TaskStatusData {
+      task_id?: string;
+      status?: string;
+      msg?: string;
     }
+    const statusResp = await devApiPost<TaskStatusData>(
+      "/v1/scraper/task_status",
+      { task_ids: task_id },
+      { apiKey }
+    );
 
-    if (typeof dlBody === "object" && dlBody !== null && !Array.isArray(dlBody)) {
-      const dlObj = dlBody as Record<string, unknown>;
+    const rawStatus = (statusResp as TaskStatusData)?.status;
+    const normalized = normalizeStatus(rawStatus);
 
-      // Pending
-      if (dlObj.code === 27202) {
-        return JSON.stringify({
-          status: "pending",
-          task_id,
-          agent_instruction: "Task is queued. Retry novada_scraper_status in 5-10 seconds.",
-        }, null, 2);
-      }
-
-      // Complete: direct result object (Google SERP format, etc.)
-      if ("search_metadata" in dlObj || "organic" in dlObj || "organic_results" in dlObj) {
+    switch (normalized) {
+      case "complete":
         return JSON.stringify({
           status: "complete",
           task_id,
           agent_instruction: `Task complete. Call novada_scraper_result with task_id="${task_id}" to retrieve formatted results.`,
         }, null, 2);
-      }
+      case "failed":
+        return JSON.stringify({
+          status: "failed",
+          task_id,
+          error: (statusResp as TaskStatusData)?.msg ?? "Task failed on the server side.",
+          agent_instruction: `Task failed. Re-submit with novada_scraper_submit or try novada_extract as an alternative.`,
+        }, null, 2);
+      case "running":
+        return JSON.stringify({
+          status: "running",
+          task_id,
+          agent_instruction: "Task is actively executing. Retry novada_scraper_status in 10-20 seconds.",
+        }, null, 2);
+      case "pending":
+      default:
+        return JSON.stringify({
+          status: "pending",
+          task_id,
+          agent_instruction: "Task is queued. Retry novada_scraper_status in 5-10 seconds.",
+        }, null, 2);
     }
-
-    // M-3: Guard against empty/null body silently falling through to api-m.
-    // If the primary endpoint returned HTTP 200 with non-actionable data (empty string,
-    // null, empty array, or unrecognized shape), explicitly fall through to the api-m
-    // fallback rather than silently misclassifying.
-    // (No early return here — intentional fall-through to api-m status endpoint below.)
   } catch (primaryErr: unknown) {
     if (primaryErr instanceof AxiosError) {
       const s = primaryErr.response?.status;
@@ -122,6 +126,7 @@ export async function novadaScraperStatus(
       }
       // Other errors — fall through to api-m fallback
     }
+    // Non-AxiosError from devApiPost (NovadaError): also fall through to fallback
   }
 
   // Fallback: try the api-m status endpoint

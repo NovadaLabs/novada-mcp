@@ -3,6 +3,8 @@ import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
 import { WEB_UNBLOCKER_BASE, JS_DETECTION_THRESHOLD, TIMEOUTS } from "../config.js";
 import { getProxyCredentials, getResidentialProxyCredentials, getWebUnblockerKey } from "./credentials.js";
 
+const _sharedHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
+
 const SSL_ERROR_CODES = new Set([
   "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
   "CERT_HAS_EXPIRED",
@@ -11,8 +13,20 @@ const SSL_ERROR_CODES = new Set([
   "ERR_TLS_CERT_ALTNAME_INVALID",
 ]);
 
+// Rotate through 3 realistic Chrome UAs to appear more human
+const BROWSER_USER_AGENTS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+];
+
+function getRandomUA(): string {
+  return BROWSER_USER_AGENTS[Math.floor(Math.random() * BROWSER_USER_AGENTS.length)];
+}
+
+/** @deprecated Use getRandomUA() for content fetches. Kept for interface compatibility. */
 export const USER_AGENT =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 1000;
@@ -26,11 +40,18 @@ export async function fetchWithRetry(
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await axios.get(url, {
-        headers: { "User-Agent": USER_AGENT },
+        headers: {
+          "User-Agent": getRandomUA(),
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.5",
+          "Accept-Encoding": "gzip, deflate, br",
+          "Connection": "keep-alive",
+        },
         timeout: TIMEOUTS.STATIC_FETCH,
         maxRedirects: 5,
         maxContentLength: 10 * 1024 * 1024, // 10MB cap — prevents OOM on huge pages
         maxBodyLength: 10 * 1024 * 1024,
+        httpsAgent: _sharedHttpsAgent,
         ...options,
       });
     } catch (error) {
@@ -44,8 +65,15 @@ export async function fetchWithRetry(
       // SSL error: retry once ignoring certificate validation — common for small Chinese sites with expired/self-signed certs
       if (error instanceof AxiosError && SSL_ERROR_CODES.has((error.cause as NodeJS.ErrnoException)?.code ?? error.code ?? "")) {
         return await axios.get(url, {
+          headers: {
+            "User-Agent": getRandomUA(),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+          },
+          httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 10, rejectUnauthorized: false }),
           ...options,
-          httpsAgent: new https.Agent({ rejectUnauthorized: false }),
         });
       }
       if (attempt === retries) throw error;
@@ -55,8 +83,9 @@ export async function fetchWithRetry(
           error.response?.status === 503 ||
           !error.response);
       if (!isRetryable) throw error;
-      const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      const base = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+      const jitter = Math.random() * base;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(jitter, 30_000)));
     }
   }
   throw new Error(`Failed after ${retries + 1} attempts: ${url}`);
@@ -143,13 +172,13 @@ export async function fetchViaProxy(
 
     if (circuit.available === true) {
       // Known-good: use proxy directly
-      return fetchWithRetry(url, { headers: { "User-Agent": USER_AGENT }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...axiosOptions });
+      return fetchWithRetry(url, { headers: { "User-Agent": getRandomUA(), "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.5", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive" }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...axiosOptions });
     }
 
     // Unknown state: race proxy vs direct fetch — take the first successful response.
     // Probe proxy with 0 retries: a single failure is enough to mark circuit open and
     // fall back to direct without burning 3 retries × exponential backoff (~7s).
-    const proxyProbeOptions = { headers: { "User-Agent": USER_AGENT }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...axiosOptions };
+    const proxyProbeOptions = { headers: { "User-Agent": getRandomUA(), "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.5", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive" }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...axiosOptions };
     const proxyFetch: Promise<AxiosResponse | null> = fetchWithRetry(url, proxyProbeOptions, 0)
       .then(r => { circuit.available = true; return r; })
       .catch((error: unknown) => {
@@ -217,17 +246,23 @@ export async function fetchWithRender(
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
+        const params = new URLSearchParams();
+        params.append("target_url", url);
+        params.append("response_format", "html");
+        params.append("js_render", "true");
+        if (country) params.append("country", country);
         const resp = await axios.post(
           `${WEB_UNBLOCKER_BASE}/request`,
-          { target_url: url, response_format: "html", js_render: true, country: country ?? "" },
+          params.toString(),
           {
             headers: {
-              "Content-Type": "application/json",
+              "Content-Type": "application/x-www-form-urlencoded",
               "Authorization": `Bearer ${unblockerKey}`,
             },
             timeout: TIMEOUTS.RENDER,
             maxContentLength: 10 * 1024 * 1024,
             maxBodyLength: 10 * 1024 * 1024,
+            httpsAgent: _sharedHttpsAgent,
             ...axiosOptions,
           }
         );
@@ -241,7 +276,9 @@ export async function fetchWithRender(
           // 403/429/500/502/503 are transient — retry
           if ([403, 429, 500, 502, 503].includes(innerCode) && attempt < MAX_RETRIES) {
             lastError = new Error(`Web Unblocker error (${innerCode}): ${resp.data.data.msg ?? "unknown"}`);
-            await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // backoff: 1s, 2s
+            const _base1 = Math.pow(2, attempt) * 1000;
+            const _jitter1 = Math.random() * _base1;
+            await new Promise(r => setTimeout(r, Math.min(_jitter1, 30_000)));
             continue;
           }
           throw new Error(`Web Unblocker error (${innerCode}): ${resp.data.data.msg ?? "unknown"}`);
@@ -261,7 +298,9 @@ export async function fetchWithRender(
         const status = (error as AxiosError)?.response?.status;
         if (status && [502, 503, 429].includes(status) && attempt < MAX_RETRIES) {
           lastError = error instanceof Error ? error : new Error(String(error));
-          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          const _base2 = Math.pow(2, attempt) * 1000;
+          const _jitter2 = Math.random() * _base2;
+          await new Promise(r => setTimeout(r, Math.min(_jitter2, 30_000)));
           continue;
         }
         throw error;

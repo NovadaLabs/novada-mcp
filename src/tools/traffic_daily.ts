@@ -8,7 +8,7 @@ import { devApiParallel, withDateRangeCompat } from "../_core/developer_api.js";
 const FLOW_ENDPOINTS = [
   { key: "residential", path: "/v1/residential_flow/consume_log" },
   { key: "isp",         path: "/v1/isp_flow/consume_log" },
-  { key: "mobile",      path: "/v1/mobile_flow/consume_log" },
+  { key: "mobile",      path: "/v1/mobile_flow/mobile_flow_use" },
   { key: "datacenter",  path: "/v1/dc_flow/consume_log" },
   { key: "static",      path: "/v1/static_flow/consume_log" },
 ] as const;
@@ -97,7 +97,7 @@ interface PerProductSummary {
  */
 export async function novadaTrafficDaily(
   params: TrafficDailyParams,
-  _apiKey?: string,
+  apiKey?: string,
 ): Promise<string> {
   const selected = params.products?.length
     ? FLOW_ENDPOINTS.filter(e =>
@@ -105,16 +105,28 @@ export async function novadaTrafficDaily(
       )
     : FLOW_ENDPOINTS;
 
-  let baseBody: Record<string, unknown> = {};
-  if (params.start_time !== undefined || params.end_time !== undefined) {
-    baseBody = withDateRangeCompat({}, {
-      start: params.start_time,
-      end: params.end_time,
-    });
-  }
+  // INC-191: Always send date range — the server returns code=10001 "Invalid parameter"
+  // when no dates are provided, even though docs say they're "optional".
+  // Default: last 7 days → today.
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const defaultStart = sevenDaysAgo.toISOString().slice(0, 10);
+  const defaultEnd = now.toISOString().slice(0, 10);
+
+  const baseBody: Record<string, unknown> = withDateRangeCompat({}, {
+    start: params.start_time ?? defaultStart,
+    end: params.end_time ?? defaultEnd,
+  });
 
   const results = await devApiParallel(
-    selected.map(e => ({ key: e.key, path: e.path, body: { ...baseBody } })),
+    selected.map(e => ({
+      key: e.key,
+      path: e.path,
+      body: e.key === "mobile"
+        ? { ...baseBody, day_or_hour: "2" }  // mobile endpoint requires day_or_hour; "2"=by day
+        : { ...baseBody },
+    })),
+    { apiKey },
   );
 
   const summary: Record<string, PerProductSummary> = {};

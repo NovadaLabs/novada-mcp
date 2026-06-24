@@ -46,7 +46,7 @@ const TOOL_CATALOG: ToolEntry[] = [
   // Scraping & Verification
   {
     name: "novada_scrape",
-    description: "Extract structured data from 129 supported platforms (Amazon, Reddit, TikTok, LinkedIn, etc.) in a single synchronous call; supports markdown/json/csv/html/xlsx output",
+    description: "Extract structured data from 13 active platforms (~78 operations) (Amazon, TikTok, LinkedIn, YouTube, etc.) in a single synchronous call; supports markdown/json/csv/html/xlsx output",
     category: "Scraping & Verification",
     status: "active",
   },
@@ -295,7 +295,7 @@ export async function novadaDiscover(params: DiscoverParams): Promise<string> {
     "- **Search the web:** Use `novada_search` for queries, `novada_extract` for specific URLs."
   );
   lines.push(
-    "- **Structured data:** Use `novada_scrape` for 129 platforms (Amazon, TikTok, LinkedIn, etc.)."
+    "- **Structured data:** Use `novada_scrape` for 13 active platforms (~78 operations) (Amazon, TikTok, LinkedIn, etc.)."
   );
   lines.push(
     "- **Full research:** Use `novada_research` for multi-source synthesis."

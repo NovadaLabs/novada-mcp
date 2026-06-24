@@ -8,7 +8,7 @@ import { devApiParallel } from "../_core/developer_api.js";
 const BALANCE_ENDPOINTS = [
   { key: "residential", path: "/v1/residential_flow/balance" },
   { key: "isp",         path: "/v1/isp_flow/balance" },
-  { key: "mobile",      path: "/v1/mobile_flow/balance" },
+  { key: "mobile",      path: "/v1/mobile_flow/mobile_flow_balance" },
   { key: "datacenter",  path: "/v1/dc_flow/balance" },
   { key: "static",      path: "/v1/static_flow/balance" },
   { key: "capture",     path: "/v1/capture/get_balance" },
@@ -75,7 +75,7 @@ function enrichBalance(raw: unknown): { expired?: boolean; expires_at_human?: st
  */
 export async function novadaPlanBalanceAll(
   params: PlanBalanceAllParams,
-  _apiKey?: string,
+  apiKey?: string,
 ): Promise<string> {
   const requested = params.products?.length
     ? BALANCE_ENDPOINTS.filter(e => params.products!.includes(e.key as ProductKey))
@@ -83,7 +83,7 @@ export async function novadaPlanBalanceAll(
 
   const selected = requested.map(e => ({ key: e.key, path: e.path, body: {} }));
 
-  const results = await devApiParallel<unknown>(selected);
+  const results = await devApiParallel<unknown>(selected, { apiKey });
 
   const summary: Record<string, PerProductResult> = {};
   const errors: Array<{ product: string; error: string }> = [];

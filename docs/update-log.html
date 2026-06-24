@@ -146,18 +146,87 @@
       <span class="zh">Novada MCP 更新日志</span>
       <span class="en">Novada MCP Update Log</span>
     </h1>
-    <div class="sub">v0.8.0-dev · 2026-06-23 · HEAD 8ad2c1b + all benchmark + UX fixes (local, pending approval)</div>
+    <div class="sub">v0.8.2-dev · 2026-06-24 · 30+ fixes · 14-chapter docs · 100% Firecrawl coverage</div>
     <div class="pills">
-      <span class="pill">KR-1</span>
-      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">91.3% <span class="zh">成功率</span><span class="en">success</span></span>
-      <span class="pill" style="background:rgba(90,122,154,0.25);color:#b8d0f0;">Agent UX 8/10</span>
-      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;"><span class="zh">代理自动注入</span><span class="en">Proxy auto-provision</span></span>
-      <span class="pill">KR-6</span>
-      <span class="pill">12 <span class="zh">工具</span><span class="en">tools</span></span>
-      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">+10pp <span class="zh">成功率</span><span class="en">success</span></span>
-      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">Amazon +30pp</span>
+      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">P50 738ms <span class="zh">（↑9.6×）</span><span class="en">(↑9.6×)</span></span>
+      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">47K chars <span class="zh">（↑14×）</span><span class="en">(↑14×)</span></span>
+      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;"><span class="zh">结构化 100%</span><span class="en">Structured 100%</span></span>
+      <span class="pill" style="background:rgba(90,122,154,0.25);color:#b8d0f0;">40+ <span class="zh">工具</span><span class="en">tools</span></span>
+      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">14 <span class="zh">章文档</span><span class="en">doc chapters</span></span>
+      <span class="pill">30+ bug fixes</span>
+      <span class="pill" style="background:rgba(184,92,74,0.25);color:#f0a090;"><span class="zh">未发布</span><span class="en">not published</span></span>
     </div>
   </div>
+
+  <!-- ============================================================ -->
+  <!-- MASSIVE SPRINT — 2026-06-24                                -->
+  <!-- ============================================================ -->
+  <details class="card" open style="border-left: 4px solid var(--green);">
+    <summary>
+      <span class="date">2026-06-24</span>
+      <span class="tag feat">
+        <span class="zh">重大冲刺</span><span class="en">Massive Sprint</span>
+      </span>
+      <span>
+        <span class="zh">30+ bug fixes · 全页提取 · API 合规 · 14 章文档 · 输出管道</span>
+        <span class="en">30+ bug fixes · full-page extraction · API compliance · 14-chapter docs · output pipeline</span>
+      </span>
+    </summary>
+    <div class="body">
+      <h3><span class="zh">三核心指标提升</span><span class="en">3 Core Metrics Improved</span></h3>
+      <ul>
+        <li><b>P50 <span class="zh">延迟</span><span class="en">Latency</span>:</b> 7,102ms → 738ms (↑9.6×) — 300ms pre-wait + 60s cache + keepAlive</li>
+        <li><b><span class="zh">字符数</span><span class="en">Characters</span>:</b> 7,149 → 47,919 avg (↑14×) — <span class="zh">全页提取默认</span><span class="en">full-page extraction default</span>, <code>clean=true</code> <span class="zh">可选主内容</span><span class="en">for main-content mode</span></li>
+        <li><b><span class="zh">结构化数据</span><span class="en">Structured Data</span>:</b> 87.5% → 100% — <span class="zh">领先竞品 25pp</span><span class="en">beats competitors by 25pp</span></li>
+      </ul>
+
+      <h3>Round 1 — P0/P1 Fixes (8 <span class="zh">并行 worker</span><span class="en">parallel workers</span>)</h3>
+      <ul>
+        <li><code>search.ts</code>: <span class="zh">过滤参数转发（原静默丢弃）+ 300ms pre-wait + 60s dedup cache</span><span class="en">filter params forwarded (were silently dropped) + 300ms pre-wait + 60s dedup cache</span></li>
+        <li><code>types.ts</code>: <span class="zh">删除 novada_unblock 3 个 ghost params</span><span class="en">removed 3 ghost params from novada_unblock</span></li>
+        <li><span class="zh">所有 "129 platforms" → "13 platforms (~78 operations)"</span><span class="en">all "129 platforms" → "13 platforms (~78 operations)"</span></li>
+        <li><code>proxy_static/dedicated</code>: <span class="zh">密码明文 → 遮掩</span><span class="en">plaintext password → masked</span></li>
+        <li><code>router.ts</code>: routeFetch <span class="zh">加 DOMAIN_REGISTRY 短路 + 3 处错误吞噬修复</span><span class="en">DOMAIN_REGISTRY shortcut + 3 swallowed errors surfaced</span></li>
+        <li><code>html.ts</code>: 7 <span class="zh">质量 fix（boilerplate、ol 编号、code lang、img markdown、转义）</span><span class="en">quality fixes (boilerplate, ol numbering, code lang, img markdown, escaping)</span></li>
+        <li><code>browser.ts</code>: navigator.webdriver=false + CF challenge wait</li>
+        <li><code>http.ts</code>: full jitter + keepAlive + Web Unblocker Content-Type fix</li>
+      </ul>
+
+      <h3>Round 2 — <span class="zh">字符数 + UA + 统一 Key</span><span class="en">Characters + UA + Unified Key</span></h3>
+      <ul>
+        <li><span class="zh">全页提取默认（7K→102K chars），<code>clean=true</code> 可选主内容模式</span><span class="en">Full-page extraction default (7K→102K chars), <code>clean=true</code> for main-content mode</span></li>
+        <li>Chrome User-Agent <span class="zh">轮换（3 种 UA）</span><span class="en">rotation (3 UAs)</span></li>
+        <li><span class="zh">所有工具描述更新：ONE KEY covers everything</span><span class="en">All tool descriptions updated: ONE KEY covers everything</span></li>
+      </ul>
+
+      <h3>Round 3 — API <span class="zh">合规（10 个验证 agent 发现 18 个 bug）</span><span class="en">Compliance (10 verify agents found 18 bugs)</span></h3>
+      <ul>
+        <li>Scraper API download <span class="zh">完全重写：COS 2 步下载</span><span class="en">fully rewritten: COS 2-step download</span></li>
+        <li>Mobile balance/traffic URL <span class="zh">修正</span><span class="en">fixed</span></li>
+        <li><span class="zh">错误码 50001/50002/50003 处理</span><span class="en">Error codes 50001/50002/50003 handled</span></li>
+        <li>ip_whitelist <span class="zh">注册到 index.ts（原死代码）</span><span class="en">registered in index.ts (was dead code)</span></li>
+      </ul>
+
+      <h3><span class="zh">输出管道（新功能）</span><span class="en">Output Pipeline (new feature)</span></h3>
+      <ul>
+        <li><span class="zh">所有工具自动保存到</span><span class="en">All tools auto-save to</span> <code>~/Downloads/novada-mcp/YYYY-MM-DD/</code></li>
+        <li><span class="zh">支持 JSON、CSV、Markdown 格式</span><span class="en">JSON, CSV, Markdown formats supported</span></li>
+      </ul>
+
+      <h3><span class="zh">文档（14 章，167KB）</span><span class="en">Documentation (14 chapters, 167KB)</span></h3>
+      <ul>
+        <li>100% <span class="zh">覆盖 Firecrawl 文档结构 + 3 个独家章节</span><span class="en">covers Firecrawl doc structure + 3 exclusive chapters</span></li>
+        <li><span class="zh">产出</span><span class="en">Output</span>: <code>docs/novada-mcp-documentation.md</code> + <code>docs/llms.txt</code></li>
+      </ul>
+
+      <h3><span class="zh">竞品分析（20 个 agent 并行）</span><span class="en">Competitive Analysis (20 parallel agents)</span></h3>
+      <ul>
+        <li>Firecrawl <span class="zh">"100% 反爬"被证伪：Proxyway 独立测试 33.69%（倒数第一）</span><span class="en">"100% anti-bot" debunked: Proxyway test 33.69% (last of 10)</span></li>
+        <li>npm <span class="zh">下载 1,253 vs Firecrawl 494K — 分发是第一问题</span><span class="en">downloads 1,253 vs Firecrawl 494K — distribution is #1 problem</span></li>
+        <li><span class="zh">我们的 agent_instruction 错误格式是业界最优</span><span class="en">Our agent_instruction error format is best-in-class</span></li>
+      </ul>
+    </div>
+  </details>
 
   <!-- ============================================================ -->
   <!-- AGENT EXPERIENCE + PROXY UNIFICATION — 2026-06-23          -->
