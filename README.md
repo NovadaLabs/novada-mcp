@@ -1,6 +1,6 @@
-# novada
+# Novada Mcp
 
-> One MCP server. All web data. Search, scrape, crawl, proxy, and AI research — in a single `npx` command.
+> One MCP. All web data. Search, scrape, crawl, proxy, and AI research — in a single `npx` command.
 
 [![npm version](https://img.shields.io/npm/v/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
 [![npm downloads](https://img.shields.io/npm/dm/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
