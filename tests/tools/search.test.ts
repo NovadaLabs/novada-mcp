@@ -79,7 +79,7 @@ describe("novadaSearch", () => {
     Object.defineProperty(err, "response", { value: { status: 404, data: "404 page not found" } });
     mockedAxios.post.mockRejectedValue(err);
 
-    const result = await novadaSearch({ query: "test", engine: "google", num: 10, country: "", language: "" }, API_KEY);
+    const result = await novadaSearch({ query: "test-404-unique", engine: "google", num: 10, country: "", language: "" }, API_KEY);
     expect(result).toContain("Search Unavailable");
     expect(result).toContain("novada_extract");
   });
@@ -113,7 +113,7 @@ describe("novadaSearch", () => {
 
     const result = await novadaSearch(
       {
-        query: "test",
+        query: "test-extract-opts",
         engine: "google",
         num: 10,
         country: "",
@@ -136,7 +136,7 @@ describe("novadaSearch", () => {
     mockGoogleSuccess([{ title: "Result A", url: "https://example.com/a", description: "Desc A" }]);
 
     const result = await novadaSearch(
-      { query: "test", engine: "google", num: 10, country: "", language: "" },
+      { query: "test-no-extract", engine: "google", num: 10, country: "", language: "" },
       API_KEY
     );
 
@@ -162,7 +162,7 @@ describe("novadaSearch", () => {
 
     const result = await novadaSearch(
       {
-        query: "test",
+        query: "test-extract-fail",
         engine: "google",
         num: 10,
         country: "",
@@ -210,7 +210,7 @@ describe("novadaSearch", () => {
       data: { organic_results: [{ title: "Retried Bing", url: "https://example.com", description: "Desc" }] },
     });
 
-    const result = await novadaSearch({ query: "test", engine: "bing", num: 5, country: "", language: "" }, API_KEY);
+    const result = await novadaSearch({ query: "bing-retry-unique", engine: "bing", num: 5, country: "", language: "" }, API_KEY);
     expect(result).toContain("Retried Bing");
     expect(mockedAxios.post).toHaveBeenCalledTimes(2); // one retry
   });
@@ -221,7 +221,7 @@ describe("novadaSearch", () => {
       data: { code: 0, data: { data: { html: bingHtml } } }, // html present, no task_id
     });
 
-    const result = await novadaSearch({ query: "test", engine: "bing", num: 5, country: "", language: "" }, API_KEY);
+    const result = await novadaSearch({ query: "bing-html-unique", engine: "bing", num: 5, country: "", language: "" }, API_KEY);
     expect(result).toContain("Bing HTML Title");
     expect(result).toContain("https://example.com/bing");
   });
@@ -229,7 +229,7 @@ describe("novadaSearch", () => {
   it("Bing: returns empty gracefully after 3 null responses (no crash)", async () => {
     mockedAxios.post.mockResolvedValue({ data: { code: 0, data: { data: null } } });
 
-    const result = await novadaSearch({ query: "test", engine: "bing", num: 5, country: "", language: "" }, API_KEY);
+    const result = await novadaSearch({ query: "bing-null-unique", engine: "bing", num: 5, country: "", language: "" }, API_KEY);
     expect(result).toContain("No results found for:");
     expect(mockedAxios.post).toHaveBeenCalledTimes(3); // all 3 retries exhausted
   });
@@ -243,7 +243,7 @@ describe("novadaSearch", () => {
       data: { organic_results: [{ title: "Deep Path", url: "https://deep.com", description: "d" }] },
     });
 
-    const result = await novadaSearch({ query: "test", engine: "bing", num: 5, country: "", language: "" }, API_KEY);
+    const result = await novadaSearch({ query: "bing-deep-unique", engine: "bing", num: 5, country: "", language: "" }, API_KEY);
     expect(result).toContain("Deep Path");
     // Verify the get call used the task_id from the deep path
     const getUrl = mockedAxios.get.mock.calls[0][0] as string;
