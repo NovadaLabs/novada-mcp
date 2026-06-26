@@ -357,7 +357,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
     return YAHOO_UNAVAILABLE;
   }
 
-  const cacheKey = `${engine}:${params.query}:${params.num ?? 10}`;
+  const cacheKey = `${engine}:${params.query}:${params.num ?? 10}:${params.project ?? ""}`;
   const cached = _searchCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < SEARCH_CACHE_TTL) {
     return cached.result;
@@ -558,6 +558,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
         hint: params.query?.slice(0, 30) || "search",
         format: "json",
         data: { query: params.query, engine: params.engine, results: reranked },
+        project: params.project,
       });
       (jsonResult as Record<string, unknown>).output_saved = outputResult.filePath;
     } catch { /* best-effort */ }
@@ -654,6 +655,7 @@ export async function novadaSearch(params: SearchParams, apiKey: string): Promis
       hint: params.query?.slice(0, 30) || "search",
       format: "json",
       data: { query: params.query, engine: params.engine, results: reranked },
+      project: params.project,
     });
     savePrefix = `📁 ${outputResult.filePath}\n\n`;
   } catch { /* best-effort */ }

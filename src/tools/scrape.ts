@@ -435,6 +435,7 @@ export async function novadaScrape(params: ScrapeParams | ScrapeParamsFullType, 
       hint: domain,
       format: format === "json" ? "json" : "csv",
       data: rawRecords.slice(0, limit),
+      project: (params as ScrapeParams).project,
     });
     output += `\n\n## Output Saved\n${outputResult.summary}`;
   } catch { /* file save is best-effort */ }

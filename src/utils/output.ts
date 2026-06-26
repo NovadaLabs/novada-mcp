@@ -8,6 +8,7 @@ export interface OutputOptions {
   format: "json" | "csv" | "md" | "html";
   data: unknown;       // the actual content to save
   cosUrl?: string;     // COS download URL (scraper API only)
+  project?: string;    // optional project name to group outputs in a subfolder
 }
 
 export interface OutputResult {
@@ -53,10 +54,11 @@ function topicSlug(hint: string): string {
  *
  * @param topic - sanitized topic slug for subfolder (optional)
  */
-async function getOutputDir(topic?: string): Promise<string> {
+async function getOutputDir(topic?: string, project?: string): Promise<string> {
   const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-  const base = join(homedir(), "Downloads", "novada-mcp", today);
-  const dir = topic ? join(base, topic) : base;
+  let dir = join(homedir(), "Downloads", "novada-mcp", today);
+  if (project) dir = join(dir, sanitize(project, 30));
+  if (topic) dir = join(dir, topic);
   await mkdir(dir, { recursive: true });
   return dir;
 }
@@ -137,7 +139,7 @@ export async function saveOutput(options: OutputOptions): Promise<OutputResult> 
 
   // Build topic subfolder from the hint
   const topic = topicSlug(hint);
-  const dir = await getOutputDir(topic);
+  const dir = await getOutputDir(topic, options.project ? sanitize(options.project, 30) : undefined);
   const fileName = generateFileName(hint, format);
   const filePath = join(dir, fileName);
 

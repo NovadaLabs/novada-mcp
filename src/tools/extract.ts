@@ -384,6 +384,7 @@ async function extractSingleInner(
         hint: domain,
         format: "html",
         data: html,
+        project: params.project,
       });
       htmlOutput += `\n<!-- Output saved: ${outputResult.filePath} -->`;
     } catch { /* best-effort */ }
@@ -680,6 +681,7 @@ async function extractSingleInner(
         hint: domain,
         format: "json",
         data: jsonResult,
+        project: params.project,
       });
       (jsonResult as Record<string, unknown>).output_saved = outputResult.filePath;
     } catch { /* best-effort */ }
@@ -706,17 +708,25 @@ async function extractSingleInner(
 
   // Requested Fields block (before Structured Data)
   if (fieldResults && fieldResults.length > 0) {
-    lines.push(`## Requested Fields`);
-    for (const r of fieldResults) {
-      const sourceTag = r.source === "not_found" ? " *(not found)*" : r.source === "structured_data" ? " *(from schema)*" : r.source === "heading" ? " *(from heading)*" : " *(pattern)*";
-      if (r.source === "not_found") {
-        lines.push(`${r.field}: —`);
-      } else {
-        // P0-3: Strip *(pattern)* annotation from the field value itself
-        const cleanValue = typeof r.value === "string"
-          ? r.value.replace(/ \*\(pattern\)\*/g, "").trimEnd()
-          : r.value;
-        lines.push(`${r.field}: ${cleanValue}${sourceTag}`);
+    const allNotFound = fieldResults.every(r => r.source === "not_found");
+    if (allNotFound && fieldResults.length > 0) {
+      lines.push(`## Requested Fields (not available as structured data)`);
+      lines.push(`Fields [${fieldResults.map(r => r.field).join(', ')}] could not be extracted from structured data (JSON-LD/meta tags).`);
+      lines.push(`The data may be present in the page content above — read the markdown body directly.`);
+      lines.push(`agent_instruction: For Wikipedia/wiki pages, parse the content body. For e-commerce sites, fields extraction works automatically.`);
+    } else {
+      lines.push(`## Requested Fields`);
+      for (const r of fieldResults) {
+        const sourceTag = r.source === "not_found" ? " *(not found)*" : r.source === "structured_data" ? " *(from schema)*" : r.source === "heading" ? " *(from heading)*" : " *(pattern)*";
+        if (r.source === "not_found") {
+          lines.push(`${r.field}: — (not in structured data)`);
+        } else {
+          // P0-3: Strip *(pattern)* annotation from the field value itself
+          const cleanValue = typeof r.value === "string"
+            ? r.value.replace(/ \*\(pattern\)\*/g, "").trimEnd()
+            : r.value;
+          lines.push(`${r.field}: ${cleanValue}${sourceTag}`);
+        }
       }
     }
     lines.push(``, `---`, ``);
@@ -880,6 +890,7 @@ async function extractSingleInner(
       hint: domain,
       format: "md",
       data: mdOutput,
+      project: params.project,
     });
     savePrefix = `📁 ${outputResult.filePath}\n\n`;
   } catch { /* best-effort */ }
