@@ -146,7 +146,7 @@
       <span class="zh">Novada MCP 更新日志</span>
       <span class="en">Novada MCP Update Log</span>
     </h1>
-    <div class="sub">v0.8.2-dev · 2026-06-24 · 30+ fixes · 14-chapter docs · 100% Firecrawl coverage</div>
+    <div class="sub">npm v0.8.4 · hosted v0.8.4.t1 · 2026-06-27 · 40+ tools · 14-chapter docs · 100% Firecrawl coverage</div>
     <div class="pills">
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">P50 738ms <span class="zh">（↑9.6×）</span><span class="en">(↑9.6×)</span></span>
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">47K chars <span class="zh">（↑14×）</span><span class="en">(↑14×)</span></span>
@@ -154,14 +154,61 @@
       <span class="pill" style="background:rgba(90,122,154,0.25);color:#b8d0f0;">40+ <span class="zh">工具</span><span class="en">tools</span></span>
       <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">14 <span class="zh">章文档</span><span class="en">doc chapters</span></span>
       <span class="pill">30+ bug fixes</span>
-      <span class="pill" style="background:rgba(184,92,74,0.25);color:#f0a090;"><span class="zh">未发布</span><span class="en">not published</span></span>
+      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">npm v0.8.4</span>
+      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">hosted v0.8.4.t1</span>
     </div>
   </div>
 
   <!-- ============================================================ -->
   <!-- MASSIVE SPRINT — 2026-06-24                                -->
   <!-- ============================================================ -->
-  <details class="card" open style="border-left: 4px solid var(--green);">
+  <!-- ============================================================ -->
+  <!-- HOSTED VERSION SYNC — 2026-06-27                           -->
+  <!-- ============================================================ -->
+  <details class="card" open style="border-left: 4px solid var(--purple);">
+    <summary>
+      <span class="date">2026-06-27</span>
+      <span class="tag tag-sync">
+        <span class="zh">同步</span><span class="en">Sync</span>
+      </span>
+      <span>
+        <span class="zh">托管端版本号脱节修复 — serverInfo 现在真实且自动派生</span>
+        <span class="en">Hosted version desync fixed — serverInfo now truthful &amp; auto-derived</span>
+      </span>
+      <span class="chip" style="background:var(--purple-light);color:var(--purple);">0.8.4.t1</span>
+    </summary>
+    <div class="body">
+      <div class="note warn">
+        <b><span class="zh">问题：</span><span class="en">Problem:</span></b>
+        <span class="zh">线上 mcp.novada.com 的 <code>serverInfo.version</code> 报告 <code>0.8.2-hosted</code>，而 npm 包与托管 vendor 早已是 <code>0.8.4</code> —— 落后两个版本。外部用户 / MCP 目录看到的是"已废弃"的假象。</span>
+        <span class="en">Live mcp.novada.com reported <code>serverInfo.version = 0.8.2-hosted</code> while npm + the vendored copy were already <code>0.8.4</code> — two releases behind. External users / MCP registries saw a stale, abandoned-looking version.</span>
+      </div>
+      <h3><span class="zh">根因</span><span class="en">Root cause</span></h3>
+      <ul>
+        <li><span class="zh">版本号在 </span><code>vercel/api/mcp.ts</code><span class="zh"> 中写死成字符串，多次 vendor 同步从未更新；休眠的 worker 更旧（</span><code>0.7.13-hosted</code><span class="zh">）。</span><span class="en"> Version was hardcoded as a literal in <code>vercel/api/mcp.ts</code>, never bumped across vendor syncs; the dormant worker was even older (<code>0.7.13-hosted</code>).</span></li>
+      </ul>
+      <h3><span class="zh">修复</span><span class="en">Fix</span></h3>
+      <ul>
+        <li><span class="zh">线上版本号改为<b>自动派生</b>：npm 版本部分始终读取 vendored </span><code>package.json</code><span class="zh">（绝不写死），再加"仅服务端"构建标签 </span><code>t1</code><span class="zh"> → </span><code>0.8.4.t1-hosted</code><span class="zh">。从此不可能再漂移。</span><span class="en"> Live version now <b>auto-derives</b>: the npm part always reads the vendored <code>package.json</code> (never hardcoded) + a server-only build tag <code>t1</code> → <code>0.8.4.t1-hosted</code>. Drift is now structurally impossible.</span></li>
+        <li><span class="zh">休眠 worker 标签校正并标注"未部署"。</span><span class="en">Dormant worker label corrected and marked not-deployed.</span></li>
+      </ul>
+      <table>
+        <tr><th>Surface</th><th>Version</th><th>Loop 1</th></tr>
+        <tr><td>npm <code>novada-mcp</code></td><td>0.8.4</td><td>—</td></tr>
+        <tr><td><span class="zh">线上 </span><span class="en">Live </span>mcp.novada.com</td><td style="color:var(--green);font-weight:700;">0.8.4.t1-hosted ✅</td><td>—</td></tr>
+      </table>
+      <div class="note">
+        <b><span class="zh">说明：</span><span class="en">Note:</span></b>
+        <span class="zh">此修复只在服务端仓库（novada-mcpserver），npm 包未改动，故不发新 npm 版本。Loop 1（内容质量 / JS 延迟 / 字段解析）仍待随 v0.8.5 上线。</span>
+        <span class="en">This fix is server-side only (novada-mcpserver); the npm package is unchanged, so no new npm release. Loop 1 (content quality / JS latency / field parsers) still pending with v0.8.5.</span>
+      </div>
+    </div>
+  </details>
+
+  <!-- ============================================================ -->
+  <!-- MASSIVE SPRINT — 2026-06-24                                -->
+  <!-- ============================================================ -->
+  <details class="card" style="border-left: 4px solid var(--green);">
     <summary>
       <span class="date">2026-06-24</span>
       <span class="tag feat">
