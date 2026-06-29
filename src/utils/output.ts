@@ -194,6 +194,18 @@ export function toCsv(records: Record<string, unknown>[]): string {
 export async function saveOutput(options: OutputOptions): Promise<OutputResult> {
   const { tool, hint = "output", format, data, cosUrl } = options;
 
+  // Serverless guard (Vercel = read-only FS outside /tmp): never write to disk; return
+  // a no-op result so tool calls don't crash. This puts the hosted-safe behavior in the
+  // source so re-vendoring to novada-mcpserver no longer needs a manual output.js stub.
+  // Local / CLI usage (no VERCEL env) is unaffected and still writes to ~/Downloads.
+  if (process.env.VERCEL || process.env.VERCEL_ENV) {
+    const recordCount = Array.isArray(data) ? data.length : undefined;
+    const parts = ["(hosted mode — output not saved to disk)"];
+    if (recordCount !== undefined) parts.push(`${recordCount} records`);
+    if (cosUrl) parts.push(`Download: ${cosUrl}`);
+    return { filePath: "", cosUrl, recordCount, summary: parts.join(" | ") };
+  }
+
   // Build topic subfolder from the hint
   const topic = topicSlug(hint);
   const dir = await getOutputDir(topic, options.project ? sanitize(options.project, 30) : undefined);
