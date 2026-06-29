@@ -146,7 +146,7 @@
       <span class="zh">Novada MCP 更新日志</span>
       <span class="en">Novada MCP Update Log</span>
     </h1>
-    <div class="sub">npm v0.8.5 · hosted v0.8.5 · 2026-06-29 · 40+ tools · 14-chapter docs · 100% Firecrawl coverage</div>
+    <div class="sub">npm v0.8.6 · hosted v0.8.6 · 2026-06-29 · 40+ tools · 14-chapter docs · 100% Firecrawl coverage</div>
     <div class="pills">
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">P50 738ms <span class="zh">（↑9.6×）</span><span class="en">(↑9.6×)</span></span>
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">47K chars <span class="zh">（↑14×）</span><span class="en">(↑14×)</span></span>
@@ -154,8 +154,8 @@
       <span class="pill" style="background:rgba(90,122,154,0.25);color:#b8d0f0;">40+ <span class="zh">工具</span><span class="en">tools</span></span>
       <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">14 <span class="zh">章文档</span><span class="en">doc chapters</span></span>
       <span class="pill">30+ bug fixes</span>
-      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">npm v0.8.5</span>
-      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">hosted v0.8.5</span>
+      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">npm v0.8.6</span>
+      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">hosted v0.8.6</span>
     </div>
   </div>
 
@@ -168,7 +168,34 @@
   <!-- ============================================================ -->
   <!-- v0.8.5 OPTIMIZATION RELEASE — 2026-06-29                    -->
   <!-- ============================================================ -->
-  <details class="card" open style="border-left: 4px solid var(--green);">
+  <!-- ============================================================ -->
+  <!-- v0.8.6 PATCH — 2026-06-29                                  -->
+  <!-- ============================================================ -->
+  <details class="card" open style="border-left: 4px solid var(--blue);">
+    <summary>
+      <span class="date">2026-06-29</span>
+      <span class="tag tag-fix"><span class="zh">修复</span><span class="en">Patch</span></span>
+      <span>
+        <span class="zh">v0.8.6 — 审计修复:托管错误质量 + v0.8.5 回归 + serverless 守卫</span>
+        <span class="en">v0.8.6 — audit fixes: hosted error-quality + v0.8.5 regressions + serverless guard</span>
+      </span>
+      <span class="chip" style="background:var(--blue-light);color:var(--blue);">v0.8.6</span>
+    </summary>
+    <div class="body">
+      <ul>
+        <li><b>NOV-571</b> <span class="zh">托管端错误现在保留 </span><code>agent_instruction</code><span class="zh">(之前付费端点丢弃了所有定制错误指引)</span><span class="en"> Hosted errors now preserve <code>agent_instruction</code> (the paid endpoint was dropping all tailored guidance)</span></li>
+        <li><b>NOV-574</b> <span class="zh">修两个 v0.8.5 回归:</span><code>detectIntent</code> <span class="zh">社交词子串误判 + </span><code>STAT_FIELD</code> <span class="zh">数字守卫(要求值"是"数字,而非含数字的散文)</span><span class="en"> Two v0.8.5 regressions: detectIntent social substring mis-match + STAT_FIELD guard (value must BE a number, not prose containing one)</span></li>
+        <li><span class="zh">源码 </span><code>output.ts</code> <span class="zh">加 serverless 守卫 — 托管 re-vendor 不再需要手动 stub</span><span class="en"> output.ts serverless guard in source — hosted re-vendor no longer needs a manual stub</span></li>
+        <li><span class="zh">安全:从托管 vendor 移除 4 个未接线的账户管理工具(capture_apikey/reset 等)</span><span class="en"> Security: removed 4 unwired account-mgmt tools (capture_apikey/reset etc.) from the hosted vendor</span></li>
+      </ul>
+      <div class="note"><span class="zh">9 项审计发现已归档为 NOV-570…578(本次发 P0 + 回归,其余进 backlog)。</span><span class="en">9 audit findings filed as NOV-570…578 (this release ships the P0s + regressions; rest backlogged).</span></div>
+    </div>
+  </details>
+
+  <!-- ============================================================ -->
+  <!-- v0.8.5 OPTIMIZATION RELEASE — 2026-06-29                    -->
+  <!-- ============================================================ -->
+  <details class="card" style="border-left: 4px solid var(--green);">
     <summary>
       <span class="date">2026-06-29</span>
       <span class="tag tag-feat">
