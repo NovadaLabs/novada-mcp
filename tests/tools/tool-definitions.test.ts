@@ -1,0 +1,107 @@
+/**
+ * Tool-definition invariants for the ListTools surface (src/index.ts `TOOLS` array).
+ *
+ * Covers NOV-326 + NOV-324:
+ *   1. Every tool definition declares `annotations` (readOnly/destructive/idempotent/openWorld hints).
+ *   2. The CORE read tools (search, extract, map, verify) declare an `outputSchema`
+ *      (MCP spec 2025-06-18) whose top-level type is "object".
+ *   3. novada_monitor's description opens with the session-scope limitation.
+ *   4. novada_scraper_submit's description documents the REAL params (platform/operation/
+ *      params) and does NOT advertise a non-existent `scraper_type` param (NOV-324).
+ *
+ * Why read src/index.ts as TEXT instead of importing it: index.ts constructs and runs the
+ * MCP server at module top-level (`new NovadaMCPServer(); server.run()`). Importing it would
+ * boot a stdio server inside the test process. Parsing the file text is side-effect-free —
+ * the same approach used by tests/tools/discover.test.ts.
+ */
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+interface ToolSegment {
+  name: string;
+  body: string;
+}
+
+/**
+ * Slice src/index.ts into per-tool segments from `const TOOLS = [` up to the first
+ * top-level `];`, so we never pick up `name:` keys from other arrays (CATEGORY_MAP,
+ * the --help block, etc.).
+ */
+function readToolSegments(): ToolSegment[] {
+  const indexPath = resolve(__dirname, "../../src/index.ts");
+  const src = readFileSync(indexPath, "utf8");
+  const start = src.indexOf("const TOOLS = [");
+  expect(start, "could not locate `const TOOLS = [` in src/index.ts").toBeGreaterThan(-1);
+  const after = src.slice(start);
+  const endRel = after.search(/\n\];/);
+  expect(endRel, "could not locate end of TOOLS array").toBeGreaterThan(-1);
+  const block = after.slice(0, endRel);
+
+  const re = /name:\s*"([a-z_]+)"/g;
+  const marks: { name: string; idx: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(block)) !== null) marks.push({ name: m[1], idx: m.index });
+
+  return marks.map((mark, i) => ({
+    name: mark.name,
+    body: block.slice(mark.idx, i + 1 < marks.length ? marks[i + 1].idx : block.length),
+  }));
+}
+
+const segments = readToolSegments();
+
+describe("tool definitions (src/index.ts TOOLS)", () => {
+  it("declares at least the full tool surface", () => {
+    expect(segments.length).toBeGreaterThanOrEqual(30);
+  });
+
+  it("every tool has an `annotations` block (NOV-326)", () => {
+    const missing = segments.filter(s => !/annotations:\s*\{/.test(s.body)).map(s => s.name);
+    expect(missing, `tools missing annotations: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it("every annotations block sets openWorldHint explicitly", () => {
+    const missing = segments
+      .filter(s => !/openWorldHint:\s*(true|false)/.test(s.body))
+      .map(s => s.name);
+    expect(missing, `tools missing openWorldHint: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it.each(["novada_search", "novada_extract", "novada_map", "novada_verify"])(
+    "core read tool %s declares an object outputSchema (NOV-326)",
+    (toolName) => {
+      const seg = segments.find(s => s.name === toolName);
+      expect(seg, `${toolName} not found in TOOLS`).toBeTruthy();
+      expect(/outputSchema:\s*\{/.test(seg!.body), `${toolName} missing outputSchema`).toBe(true);
+      // Accurate-to-spec: outputSchema must be a JSON object schema.
+      expect(/outputSchema:\s*\{\s*type:\s*"object"/.test(seg!.body)).toBe(true);
+      // Must enumerate at least one property.
+      expect(/properties:\s*\{/.test(seg!.body)).toBe(true);
+    }
+  );
+
+  it("novada_monitor description opens with the session-scope limitation (NOV-324)", () => {
+    const seg = segments.find(s => s.name === "novada_monitor");
+    expect(seg, "novada_monitor not found").toBeTruthy();
+    const descStart = seg!.body.indexOf("description: `");
+    expect(descStart).toBeGreaterThan(-1);
+    const firstLine = seg!.body.slice(descStart + "description: `".length).split("\n")[0];
+    expect(firstLine).toMatch(/Session-scoped only/);
+  });
+
+  it("novada_scraper_submit description matches the real schema params, not a bogus scraper_type (NOV-324)", () => {
+    const seg = segments.find(s => s.name === "novada_scraper_submit");
+    expect(seg, "novada_scraper_submit not found").toBeTruthy();
+    // NOV-324: ScraperSubmitParamsSchema has only platform/operation/params — there is no
+    // scraper_type field, so the description must not document one (it misleads agents).
+    expect(seg!.body, "scraper_submit description must not mention a non-existent scraper_type param").not.toMatch(/scraper_type/);
+    // The description must document the REAL params instead.
+    expect(seg!.body).toMatch(/platform/);
+    expect(seg!.body).toMatch(/operation/);
+    expect(seg!.body).toMatch(/params/);
+  });
+});

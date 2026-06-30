@@ -70,3 +70,9 @@ export { novadaIpWhitelist, validateIpWhitelistParams, IpWhitelistParamsSchema }
 export type { IpWhitelistParams } from "./ip_whitelist.js";
 export { novadaStaticIpMgmt, validateStaticIpMgmtParams, StaticIpMgmtParamsSchema } from "./static_ip_mgmt.js";
 export type { StaticIpMgmtParams } from "./static_ip_mgmt.js";
+
+// ─── NOV-321 / NOV-323: session telemetry + search feedback ─────────────────
+export { novadaSessionStats, validateSessionStatsParams, SessionStatsParamsSchema, recordToolCall } from "./session_stats.js";
+export type { SessionStatsParams } from "./session_stats.js";
+export { novadaSearchFeedback, validateSearchFeedbackParams, SearchFeedbackParamsSchema } from "./search_feedback.js";
+export type { SearchFeedbackParams } from "./search_feedback.js";

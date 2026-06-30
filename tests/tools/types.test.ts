@@ -8,6 +8,8 @@ import {
   validateMapParams,
   validateUnblockParams,
   validateBrowserParams,
+  validateProxyParams,
+  validateSiteCopyParams,
   classifyError,
   NovadaErrorCode,
 } from "../../src/tools/types.js";
@@ -314,5 +316,142 @@ describe("validateBrowserParams", () => {
       actions: [{ action: "wait", selector: ".loaded", timeout: 10000 }],
     });
     expect(result.actions[0].action).toBe("wait");
+  });
+});
+
+// ─── camelCase → snake_case backwards-compat aliasing (NOV-327) ───────────────
+
+describe("snake_case param aliasing (NOV-327)", () => {
+  it("extract: maps maxChars/waitFor/waitMs to snake_case", () => {
+    const r = validateExtractParams({
+      url: "https://example.com",
+      maxChars: 5000,
+      waitFor: ".price",
+      waitMs: 1500,
+    });
+    expect(r.max_chars).toBe(5000);
+    expect(r.wait_for).toBe(".price");
+    expect(r.wait_ms).toBe(1500);
+    // camelCase key must not leak through onto the validated object
+    expect((r as Record<string, unknown>).maxChars).toBeUndefined();
+  });
+
+  it("crawl: maps maxPages/selectPaths/excludePaths to snake_case", () => {
+    const r = validateCrawlParams({
+      url: "https://example.com",
+      maxPages: 12,
+      selectPaths: ["/docs/**"],
+      excludePaths: ["/blog/**"],
+    });
+    expect(r.max_pages).toBe(12);
+    expect(r.select_paths).toEqual(["/docs/**"]);
+    expect(r.exclude_paths).toEqual(["/blog/**"]);
+  });
+
+  it("map: maps includeSubdomains/maxDepth to snake_case", () => {
+    const r = validateMapParams({
+      url: "https://example.com",
+      includeSubdomains: true,
+      maxDepth: 3,
+    });
+    expect(r.include_subdomains).toBe(true);
+    expect(r.max_depth).toBe(3);
+  });
+
+  it("unblock: maps waitFor/maxChars to snake_case", () => {
+    const r = validateUnblockParams({
+      url: "https://example.com",
+      waitFor: ".ready",
+      maxChars: 200000,
+    });
+    expect(r.wait_for).toBe(".ready");
+    expect(r.max_chars).toBe(200000);
+  });
+
+  it("proxy: maps sessionId to session_id", () => {
+    const r = validateProxyParams({ sessionId: "sess-123_abc" });
+    expect(r.session_id).toBe("sess-123_abc");
+  });
+
+  it("site_copy: maps maxPages/maxDepth/includeSubdomains/selectPaths/excludePaths", () => {
+    const r = validateSiteCopyParams({
+      url: "https://example.com",
+      maxPages: 50,
+      maxDepth: 4,
+      includeSubdomains: true,
+      selectPaths: ["/x/**"],
+      excludePaths: ["/y/**"],
+    });
+    expect(r.max_pages).toBe(50);
+    expect(r.max_depth).toBe(4);
+    expect(r.include_subdomains).toBe(true);
+    expect(r.select_paths).toEqual(["/x/**"]);
+    expect(r.exclude_paths).toEqual(["/y/**"]);
+  });
+
+  it("search: maps top-level camelCase keys to snake_case", () => {
+    const r = validateSearchParams({
+      query: "q",
+      timeRange: "week",
+      startDate: "2024-01-01",
+      endDate: "2024-02-01",
+      includeDomains: ["a.com"],
+      excludeDomains: ["b.com"],
+      sourceType: "news",
+      excludeSocial: true,
+      enrichTop: true,
+    });
+    expect(r.time_range).toBe("week");
+    expect(r.start_date).toBe("2024-01-01");
+    expect(r.end_date).toBe("2024-02-01");
+    expect(r.include_domains).toEqual(["a.com"]);
+    expect(r.exclude_domains).toEqual(["b.com"]);
+    expect(r.source_type).toBe("news");
+    expect(r.exclude_social).toBe(true);
+    expect(r.enrich_top).toBe(true);
+  });
+
+  it("search: maps nested extract_options camelCase (extractOptions/maxChars/topN)", () => {
+    const r = validateSearchParams({
+      query: "q",
+      extractOptions: { maxChars: 3000, topN: 2 },
+    });
+    expect(r.extract_options?.max_chars).toBe(3000);
+    expect(r.extract_options?.top_n).toBe(2);
+  });
+
+  it("browser: maps top-level sessionId and per-action waitUntil", () => {
+    const r = validateBrowserParams({
+      actions: [{ action: "navigate", url: "https://example.com", waitUntil: "networkidle" }],
+      sessionId: "b-1",
+    });
+    expect(r.session_id).toBe("b-1");
+    expect(r.actions[0]).toMatchObject({ action: "navigate", wait_until: "networkidle" });
+  });
+
+  it("canonical snake_case wins when both forms are supplied", () => {
+    const r = validateExtractParams({
+      url: "https://example.com",
+      max_chars: 2000,
+      maxChars: 9999,
+    });
+    expect(r.max_chars).toBe(2000);
+  });
+
+  it("snake_case-only input is unaffected (no regression)", () => {
+    const r = validateExtractParams({
+      url: "https://example.com",
+      max_chars: 7000,
+      wait_for: ".z",
+    });
+    expect(r.max_chars).toBe(7000);
+    expect(r.wait_for).toBe(".z");
+  });
+
+  it("still enforces validation on the aliased (snake_case) value", () => {
+    // maxChars below the 1000 minimum must still fail after aliasing
+    expect(() =>
+      validateExtractParams({ url: "https://example.com", maxChars: 500 }),
+    ).toThrow(ZodError);
   });
 });

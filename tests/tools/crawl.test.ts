@@ -213,3 +213,54 @@ describe("compilePatterns ReDoS hardening (NOV-570)", () => {
     expect(compilePatterns(["a".repeat(1000)])).toHaveLength(1);
   });
 });
+
+describe("novadaCrawl progress notifications (NOV-319)", () => {
+  const page = (n: number) => ({
+    data: `<html><body><h1>Page ${n}</h1><p>${"word ".repeat(40)}</p>
+      <a href="https://example.com/p${n + 1}">next</a></body></html>`,
+    status: 200,
+    headers: {},
+    config: {} as never,
+    statusText: "OK",
+  });
+
+  it("emits one progress update per crawled page with progress<=total", async () => {
+    let n = 0;
+    mockedAxios.get.mockImplementation(async () => page(n++));
+
+    const updates: { progress: number; total?: number; message?: string }[] = [];
+    await novadaCrawl(
+      { url: "https://example.com", max_pages: 3, strategy: "bfs", render: "static" },
+      "test-key",
+      (info) => { updates.push(info); }
+    );
+
+    // One per page (sparse/failed pages don't count — these are all dense).
+    expect(updates).toHaveLength(3);
+    expect(updates.map(u => u.progress)).toEqual([1, 2, 3]);
+    expect(updates.every(u => u.total === 3)).toBe(true);
+    expect(updates.every(u => u.progress <= (u.total ?? 0))).toBe(true);
+    expect(updates[0].message).toContain("https://example.com");
+  });
+
+  it("is a no-op when no progress callback is supplied", async () => {
+    let n = 0;
+    mockedAxios.get.mockImplementation(async () => page(n++));
+    const result = await novadaCrawl(
+      { url: "https://example.com", max_pages: 2, strategy: "bfs", render: "static" },
+      "test-key"
+    );
+    expect(result).toContain("Crawl Results");
+  });
+
+  it("swallows reporter errors — a throwing callback never breaks the crawl", async () => {
+    let n = 0;
+    mockedAxios.get.mockImplementation(async () => page(n++));
+    const result = await novadaCrawl(
+      { url: "https://example.com", max_pages: 2, strategy: "bfs", render: "static" },
+      "test-key",
+      () => { throw new Error("reporter blew up"); }
+    );
+    expect(result).toContain("Crawl Results");
+  });
+});
