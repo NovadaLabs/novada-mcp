@@ -146,7 +146,7 @@
       <span class="zh">Novada MCP 更新日志</span>
       <span class="en">Novada MCP Update Log</span>
     </h1>
-    <div class="sub">npm v0.8.8 · hosted v0.8.8 · 2026-06-30 · 40+ tools · 14-chapter docs · 100% Firecrawl coverage</div>
+    <div class="sub">npm v0.8.9 · hosted v0.8.9 · 2026-06-30 · 40+ tools · 14-chapter docs · 100% Firecrawl coverage</div>
     <div class="pills">
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">P50 738ms <span class="zh">（↑9.6×）</span><span class="en">(↑9.6×)</span></span>
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">47K chars <span class="zh">（↑14×）</span><span class="en">(↑14×)</span></span>
@@ -154,8 +154,8 @@
       <span class="pill" style="background:rgba(90,122,154,0.25);color:#b8d0f0;">40+ <span class="zh">工具</span><span class="en">tools</span></span>
       <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">14 <span class="zh">章文档</span><span class="en">doc chapters</span></span>
       <span class="pill">30+ bug fixes</span>
-      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">npm v0.8.8</span>
-      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">hosted v0.8.8</span>
+      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">npm v0.8.9</span>
+      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">hosted v0.8.9</span>
     </div>
   </div>
 
@@ -169,9 +169,33 @@
   <!-- v0.8.5 OPTIMIZATION RELEASE — 2026-06-29                    -->
   <!-- ============================================================ -->
   <!-- ============================================================ -->
+  <!-- v0.8.9 BACKLOG BATCH B+C — 2026-06-30                       -->
+  <!-- ============================================================ -->
+  <details class="card" open style="border-left: 4px solid var(--green);">
+    <summary>
+      <span class="date">2026-06-30</span>
+      <span class="tag tag-feat"><span class="zh">功能 + 打磨</span><span class="en">Features + Polish</span></span>
+      <span>
+        <span class="zh">v0.8.9 — backlog 批次:2 新工具 + prompts + 进度通知 + snake_case + outputSchema + 路由缓存 + 日志</span>
+        <span class="en">v0.8.9 — backlog batch: 2 new tools + prompts + progress + snake_case + outputSchema + routing memory + logging</span>
+      </span>
+      <span class="chip">v0.8.9</span>
+    </summary>
+    <div class="body">
+      <ul>
+        <li><span class="zh">2 个新工具:<code>novada_session_stats</code>(用量统计)+ <code>novada_search_feedback</code>(搜索反馈飞轮)</span><span class="en"> 2 new tools: <code>novada_session_stats</code> (usage telemetry) + <code>novada_search_feedback</code> (search feedback flywheel)</span></li>
+        <li><span class="zh">MCP prompts(选工具决策树)· crawl/research 进度通知 · MCP 2025-06-18 outputSchema + annotations</span><span class="en"> MCP prompts (tool-selection decision trees) · progress notifications for crawl/research · MCP 2025-06-18 outputSchema + annotations</span></li>
+        <li><span class="zh">参数统一 snake_case(camelCase 向后兼容)· session 内域名→模式路由缓存 · 统一请求日志(NOVADA_LOG)· 出站遥测头</span><span class="en"> snake_case params (camelCase back-compat) · session domain→mode routing memory · central request logging (NOVADA_LOG) · outbound telemetry headers</span></li>
+        <li><span class="zh">README 平台数纠正(129 → 真实 13 内置 + Scraper API)· 工具描述修复 · extract 去重</span><span class="en"> README platform-count corrected (129 → truthful 13 built-in + Scraper API) · tool-desc fixes · extract dedup</span></li>
+      </ul>
+      <div class="note"><span class="zh">12 个 backlog issue 一批清完(NOV-326/327/324/325/319/321/323/330/334/315/342/402),多 agent 串行实现 + 独立复审,零回归(+83 测试通过),38 工具。</span><span class="en">Cleared 12 backlog issues in one batch via serial multi-agent implementation + independent review, zero regressions (+83 passing tests), 38 tools.</span></div>
+    </div>
+  </details>
+
+  <!-- ============================================================ -->
   <!-- v0.8.8 SECURITY HOTFIX + QA FIXES — 2026-06-30             -->
   <!-- ============================================================ -->
-  <details class="card" open style="border-left: 4px solid var(--red);">
+  <details class="card" style="border-left: 4px solid var(--red);">
     <summary>
       <span class="date">2026-06-30</span>
       <span class="tag tag-fix"><span class="zh">安全 + QA</span><span class="en">Security + QA</span></span>
