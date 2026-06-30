@@ -1,10 +1,17 @@
-# Novada Mcp
+# Novada MCP
 
-> One MCP. All web data. Search, scrape, crawl, proxy, and AI research — in a single `npx` command.
+> **One MCP server. All web data.** Search, extract, crawl, scrape, proxy, and AI research — 38 tools behind a single `npx` command. Run it locally or call the hosted endpoint.
 
 [![npm version](https://img.shields.io/npm/v/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
 [![npm downloads](https://img.shields.io/npm/dm/novada-mcp)](https://www.npmjs.com/package/novada-mcp)
+[![CI](https://github.com/NovadaLabs/novada-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/NovadaLabs/novada-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-compatible-blue)](https://modelcontextprotocol.io)
+
+```bash
+# Local (Claude Code)
+claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
+```
 
 ## The Problem
 
@@ -30,7 +37,7 @@ One server. One API key. Tools that cover every web data need an AI agent has:
 | Deep research | `novada_research` | One call → parallel searches → dedup → cited multi-source report |
 | Crawl a site | `novada_crawl` | BFS/DFS up to 20 pages with regex path filtering |
 | Discover URLs | `novada_map` | Sitemap + BFS discovery without reading content |
-| Platform data | `novada_scrape` | Amazon, LinkedIn, TikTok, GitHub, Zillow — 129 platforms |
+| Platform data | `novada_scrape` | Amazon, LinkedIn, TikTok, GitHub, Zillow — 13 built-in platform scrapers, plus the wider Novada Scraper API |
 | Monitor changes | `novada_monitor` | Track price/content/availability changes between checks |
 | Verify claims | `novada_verify` | Parallel fact-checking against live web sources |
 | Raw HTML | `novada_unblock` | JS render or full browser CDP for bot-protected pages |
@@ -40,6 +47,21 @@ One server. One API key. Tools that cover every web data need an AI agent has:
 | AI brand monitoring | `novada_ai_monitor` | Check how ChatGPT, Perplexity, Grok, Claude, Gemini mention your brand |
 | Health check | `novada_health` | Check which API products are active on your key |
 | Async scraping | `novada_scraper_submit` | Submit async scraping task → poll → retrieve results |
+
+## Tools at a Glance
+
+**38 tools, 6 categories.** Load all of them, or scope to what you need with `NOVADA_GROUPS` / `NOVADA_TOOLS`.
+
+| Category | Tools | What you get |
+|----------|-------|--------------|
+| Search & research | `novada_search` · `novada_research` · `novada_verify` · `novada_search_feedback` | 5-engine search, cited multi-source research, fact-checking |
+| Extract & crawl | `novada_extract` · `novada_crawl` · `novada_map` · `novada_monitor` · `novada_site_copy` | URL → clean markdown, multi-page crawl, URL discovery, change detection |
+| Platform scraping | `novada_scrape` · `novada_scraper_submit` · `novada_scraper_status` · `novada_scraper_result` | Structured data from 13 built-in platform scrapers (Amazon, LinkedIn, TikTok…), plus the wider Novada Scraper API |
+| Proxy network | `novada_proxy` · `_residential` · `_isp` · `_datacenter` · `_mobile` · `_static` · `_dedicated` | Connection credentials across 195 countries |
+| Browser & unblock | `novada_browser` · `novada_browser_flow` · `novada_unblock` · `novada_ai_monitor` | Cloud-browser automation, raw rendered HTML, AI brand monitoring |
+| Account & ops | `novada_health` · `novada_health_all` · `novada_setup` · `novada_discover` · `novada_wallet_balance` · `novada_plan_balance_all` · `novada_traffic_daily` · `novada_capture_logs` · `novada_session_stats` · proxy account/whitelist mgmt | Key health, balances, usage, sub-account management |
+
+> Don't want all 38 in your context window? `NOVADA_GROUPS="search,extract"` loads only those groups. Full list any time via `novada_discover`.
 
 ## What Makes This Different
 
@@ -73,6 +95,10 @@ claude mcp add novada -e NOVADA_API_KEY=your_key -- npx -y novada-mcp
 }
 ```
 
+**Hosted (no install, beta):** point any Streamable-HTTP MCP client at
+`https://mcp.novada.com/mcp?token=YOUR_KEY`. Same tools, zero local setup — note that browser
+automation (`novada_browser`, `novada_browser_flow`) is local-only and returns `NOT_AVAILABLE_ON_HOSTED`.
+
 3. Try it:
 ```
 novada_search({query: "Claude MCP tutorials", num: 5})
@@ -102,7 +128,7 @@ novada_monitor({url: "https://amazon.com/dp/B09...", fields: ["price", "availabi
 
 ### Structured Platform Data
 
-`novada_scrape` supports 129 platforms with structured data extraction. Returns clean tabular records, not raw HTML.
+`novada_scrape` ships 13 built-in platform scrapers with structured data extraction (and the wider Novada Scraper API is reachable via `novada_scraper_submit`). Returns clean tabular records, not raw HTML.
 
 | Platform | Operation Examples | Data Returned |
 |----------|-------------------|---------------|
@@ -162,7 +188,7 @@ First call records baseline. Call again later — returns field-level diffs with
 ```
 novada_scrape({platform: "amazon.com", operation: "amazon_product_keywords", params: {keyword: "wireless earbuds"}, limit: 20})
 ```
-Get structured product data (price, rating, reviews, BSR) for competitive analysis across 129 platforms.
+Get structured product data (price, rating, reviews, BSR) for competitive analysis across the built-in platform scrapers and the wider Novada Scraper API.
 
 ### Lead Generation
 ```
@@ -188,23 +214,24 @@ novada_proxy_residential({country: "DE", city: "berlin", format: "curl"})
 ```
 Get proxy credentials for any of 195 countries. Use with your own HTTP client for geo-specific content access.
 
-## Honest Comparison
+## Why Novada — Honest Comparison
 
 |  | Novada | Firecrawl | Tavily | BrightData |
 |---|---|---|---|---|
-| Tools | 25 | 14 | 2 | 69 |
-| Search engines | 5 | 0 | 1 | 3 |
+| Tools | **38** | 14 | 2 | 69 |
+| Search engines | **5** | 0 | 1 | 3 |
 | Multi-source research | **Yes** | No | No | No |
 | Proxy as MCP tool | **Yes** | No | No | No |
 | Auto anti-bot escalation | **Yes** | No | N/A | No |
 | Change monitoring | **Yes** | No | No | No |
-| Platform scraping | 129 platforms | No | No | 437 platforms |
+| Platform scraping | 13 built-in scrapers (+ Scraper API) | No | No | 437 platforms |
 | Browser automation | **Yes** (CDP) | No | No | Yes |
 | MCP Prompts & Resources | **Yes** (5+4) | No | No | No |
-| Hosted MCP (no install) | **No** | No | No | Yes |
-| Agent-first score | 8.5/10 | 6.0 | 6.0 | N/A |
+| Hosted MCP (no install) | **Yes** (beta) | No | No | Yes |
+| Cost / 1k extracts | **$1** | $4 | $5 | varies |
+| Agent-first score | **8.5/10** | 6.0 | 6.0 | N/A |
 
-> **What we don't have yet:** hosted HTTP endpoint (requires terminal install for now), and some Scraper API platforms need separate activation. BrightData has more structured scrapers (437 vs 129).
+> **Where competitors still lead:** Firecrawl and Tavily return higher raw-character counts and lower P50 latency on easy pages (see `benchmark/results/latest-summary.json`); BrightData ships more structured scrapers (437 vs Novada's 13 built-in, with more reachable through the Scraper API). Novada trades raw volume for clean main-content extraction and a 4–5× lower cost, and is closing the latency gap (success rate climbed 70%→91% across the last two benchmark runs). Some Scraper API platforms need separate activation on your key.
 
 ## Anti-Bot Support
 
@@ -238,8 +265,10 @@ Novada automatically handles these anti-bot systems via its escalation chain:
 
 - Docs + API key: [novada.com](https://www.novada.com)
 - npm: [npmjs.com/package/novada-mcp](https://www.npmjs.com/package/novada-mcp)
+- Hosted MCP endpoint (beta): `https://mcp.novada.com/mcp?token=YOUR_KEY`
 - GitHub: [github.com/NovadaLabs/novada-mcp](https://github.com/NovadaLabs/novada-mcp)
 - Issues: [github.com/NovadaLabs/novada-mcp/issues](https://github.com/NovadaLabs/novada-mcp/issues)
+- Benchmarks: [`benchmark/results/latest-summary.json`](benchmark/results/latest-summary.json) — auditable per-scenario numbers vs Firecrawl & Tavily
 - Tool details: call `novada_discover` or `novada_health` from any MCP client
 
 ## License

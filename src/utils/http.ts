@@ -1,10 +1,49 @@
 import https from "https";
+import crypto from "crypto";
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
-import { WEB_UNBLOCKER_BASE, JS_DETECTION_THRESHOLD, TIMEOUTS } from "../config.js";
+import { WEB_UNBLOCKER_BASE, JS_DETECTION_THRESHOLD, TIMEOUTS, VERSION } from "../config.js";
 import { getProxyCredentials, getResidentialProxyCredentials, getWebUnblockerKey } from "./credentials.js";
 import { assertUrlSafe, safeLookup } from "./ssrf.js";
+import { logRequest } from "../_core/request-log.js";
 
 const _sharedHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
+
+/**
+ * NOV-321: per-request telemetry headers (`x-mcp-*`) attached to every outbound
+ * Novada API request. These let the Novada backend attribute traffic to the MCP
+ * server, the calling tool, and a single process/session without carrying any
+ * secret or PII.
+ *
+ *  - x-mcp-client:  server identity + version, e.g. "novada-mcp/0.8.2".
+ *  - x-mcp-session: an opaque, in-process random id, regenerated each process
+ *    start. Lets the backend group a session's requests; it is NOT a user id and
+ *    never leaves as anything but a random hex string.
+ *  - x-mcp-tool:    the originating MCP tool ("extract", "search", …), threaded
+ *    through the fetch helpers' `tool` option. Best-effort: "unknown" if a caller
+ *    doesn't supply it.
+ */
+const MCP_CLIENT_ID = `novada-mcp/${VERSION}`;
+const MCP_SESSION_ID = crypto.randomBytes(8).toString("hex");
+
+/**
+ * Build the x-mcp-* header set for a given calling tool. client/session are
+ * process-stable; only the tool varies per call.
+ */
+function telemetryHeaders(tool: string | undefined): Record<string, string> {
+  return {
+    "x-mcp-client": MCP_CLIENT_ID,
+    "x-mcp-session": MCP_SESSION_ID,
+    "x-mcp-tool": tool ?? "unknown",
+  };
+}
+
+/**
+ * Internal extension of AxiosRequestConfig carrying the MCP-specific options that
+ * the fetch helpers consume but axios must never see (`tool` for telemetry/logging;
+ * `__noLog` to suppress duplicate request-log lines when a public helper delegates
+ * to fetchWithRetry internally). Stripped before any axios call.
+ */
+type FetchExtras = { tool?: string; __noLog?: boolean };
 
 /**
  * `safeLookup` is the DNS-rebinding guard (utils/ssrf.ts). Its runtime shape matches what
@@ -55,72 +94,89 @@ const RETRY_BASE_DELAY_MS = 1000;
 /** HTTP GET with exponential backoff retry on 429/503/network errors */
 export async function fetchWithRetry(
   url: string,
-  options: Partial<AxiosRequestConfig> = {},
+  options: Partial<AxiosRequestConfig> & FetchExtras = {},
   retries: number = MAX_RETRIES
 ): Promise<AxiosResponse> {
   // SSRF chokepoint: every fetch (incl. runtime-discovered URLs) is re-validated here,
   // not just at the Zod boundary. beforeRedirect re-checks each 3xx hop.
   assertUrlSafe(url);
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      return await axios.get(url, {
-        headers: {
-          "User-Agent": getRandomUA(),
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.5",
-          "Accept-Encoding": "gzip, deflate, br",
-          "Connection": "keep-alive",
-        },
-        timeout: TIMEOUTS.STATIC_FETCH,
-        maxRedirects: 5,
-        beforeRedirect,
-        maxContentLength: 10 * 1024 * 1024, // 10MB cap — prevents OOM on huge pages
-        maxBodyLength: 10 * 1024 * 1024,
-        httpsAgent: _sharedHttpsAgent,
-        ...options,
-        // DNS-rebinding guard: re-check the RESOLVED IP before connect. Placed after the
-        // spread so a caller option can never disable it. On proxied requests this resolves
-        // the (public) proxy host; on direct requests it resolves the real target.
-        lookup: SAFE_LOOKUP,
-      });
-    } catch (error) {
-      // Intercept 10MB cap violation and surface an actionable error
-      if (error instanceof AxiosError && error.message?.toLowerCase().includes("maxcontentlength")) {
-        throw new Error(
-          `Response from ${url} exceeds the 10MB content limit. This is usually a binary file, a very large page, or a misconfigured server. ` +
-          "Try a more specific subpage URL, or use novada_map to find the exact page you need."
-        );
-      }
-      // SSL error: retry once ignoring certificate validation — common for small Chinese sites with expired/self-signed certs
-      if (error instanceof AxiosError && SSL_ERROR_CODES.has((error.cause as NodeJS.ErrnoException)?.code ?? error.code ?? "")) {
-        return await axios.get(url, {
+  // Strip MCP-only extras before they reach axios; keep them for telemetry/logging.
+  const { tool, __noLog, ...axiosOptions } = options;
+  const startMs = Date.now();
+  try {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const resp = await axios.get(url, {
           headers: {
             "User-Agent": getRandomUA(),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
             "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive",
+            ...telemetryHeaders(tool),
           },
+          timeout: TIMEOUTS.STATIC_FETCH,
           maxRedirects: 5,
           beforeRedirect,
-          httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 10, rejectUnauthorized: false }),
-          ...options,
-          lookup: SAFE_LOOKUP, // DNS-rebinding guard (see main GET) — non-bypassable.
+          maxContentLength: 10 * 1024 * 1024, // 10MB cap — prevents OOM on huge pages
+          maxBodyLength: 10 * 1024 * 1024,
+          httpsAgent: _sharedHttpsAgent,
+          ...axiosOptions,
+          // DNS-rebinding guard: re-check the RESOLVED IP before connect. Placed after the
+          // spread so a caller option can never disable it. On proxied requests this resolves
+          // the (public) proxy host; on direct requests it resolves the real target.
+          lookup: SAFE_LOOKUP,
         });
+        if (!__noLog) logRequest({ tool: tool ?? "unknown", url, status: resp.status, ms: Date.now() - startMs, mode: "static" });
+        return resp;
+      } catch (error) {
+        // Intercept 10MB cap violation and surface an actionable error
+        if (error instanceof AxiosError && error.message?.toLowerCase().includes("maxcontentlength")) {
+          throw new Error(
+            `Response from ${url} exceeds the 10MB content limit. This is usually a binary file, a very large page, or a misconfigured server. ` +
+            "Try a more specific subpage URL, or use novada_map to find the exact page you need."
+          );
+        }
+        // SSL error: retry once ignoring certificate validation — common for small Chinese sites with expired/self-signed certs
+        if (error instanceof AxiosError && SSL_ERROR_CODES.has((error.cause as NodeJS.ErrnoException)?.code ?? error.code ?? "")) {
+          const resp = await axios.get(url, {
+            headers: {
+              "User-Agent": getRandomUA(),
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+              "Accept-Language": "en-US,en;q=0.5",
+              "Accept-Encoding": "gzip, deflate, br",
+              "Connection": "keep-alive",
+              ...telemetryHeaders(tool),
+            },
+            maxRedirects: 5,
+            beforeRedirect,
+            httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 10, rejectUnauthorized: false }),
+            ...axiosOptions,
+            lookup: SAFE_LOOKUP, // DNS-rebinding guard (see main GET) — non-bypassable.
+          });
+          if (!__noLog) logRequest({ tool: tool ?? "unknown", url, status: resp.status, ms: Date.now() - startMs, mode: "static" });
+          return resp;
+        }
+        if (attempt === retries) throw error;
+        const isRetryable =
+          error instanceof AxiosError &&
+          (error.response?.status === 429 ||
+            error.response?.status === 503 ||
+            !error.response);
+        if (!isRetryable) throw error;
+        const base = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+        const jitter = Math.random() * base;
+        await new Promise((resolve) => setTimeout(resolve, Math.min(jitter, 30_000)));
       }
-      if (attempt === retries) throw error;
-      const isRetryable =
-        error instanceof AxiosError &&
-        (error.response?.status === 429 ||
-          error.response?.status === 503 ||
-          !error.response);
-      if (!isRetryable) throw error;
-      const base = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
-      const jitter = Math.random() * base;
-      await new Promise((resolve) => setTimeout(resolve, Math.min(jitter, 30_000)));
     }
+    throw new Error(`Failed after ${retries + 1} attempts: ${url}`);
+  } catch (err) {
+    if (!__noLog) {
+      const status = err instanceof AxiosError ? err.response?.status : undefined;
+      logRequest({ tool: tool ?? "unknown", url, status, ms: Date.now() - startMs, mode: "static", error: err instanceof Error ? err.message : String(err) });
+    }
+    throw err;
   }
-  throw new Error(`Failed after ${retries + 1} attempts: ${url}`);
 }
 
 /**
@@ -155,11 +211,21 @@ function getCircuit(tier: string, endpoint: string): CircuitState {
 export async function fetchViaProxy(
   url: string,
   _apiKey: string | undefined,
-  options: Partial<AxiosRequestConfig> & { proxyTier?: "residential" | "datacenter" } = {}
+  options: Partial<AxiosRequestConfig> & { proxyTier?: "residential" | "datacenter" } & FetchExtras = {}
 ): Promise<AxiosResponse> {
   // SSRF chokepoint (also guards runtime-discovered URLs: sitemap/robots/llms.txt/BFS).
   assertUrlSafe(url);
-  const { proxyTier, ...axiosOptions } = options;
+  const { proxyTier, tool, __noLog, ...axiosOptionsRaw } = options;
+  // Inner fetchWithRetry calls carry telemetry (tool) but suppress their own log line
+  // (__noLog) — this wrapper emits exactly one request-log entry per logical proxy fetch,
+  // regardless of how many direct/proxy/race sub-fetches it spawns.
+  const axiosOptions = { ...axiosOptionsRaw, tool, __noLog: true as const };
+  const _proxyStartMs = Date.now();
+  // Emit one request-log line for the resolved proxy fetch, then hand the response back.
+  const _logOk = (resp: AxiosResponse): AxiosResponse => {
+    logRequest({ tool: tool ?? "unknown", url, status: resp.status, ms: Date.now() - _proxyStartMs, mode: "proxy" });
+    return resp;
+  };
   // Credentials: use residential creds if proxyTier === "residential", else standard proxy creds
   let effectiveTier = proxyTier ?? "datacenter";
   const proxyCreds = proxyTier === "residential"
@@ -182,6 +248,7 @@ export async function fetchViaProxy(
   const proxyPass = proxyCreds?.pass;
   const proxyEndpoint = proxyCreds?.endpoint;
 
+  try {
   if (proxyUser && proxyPass && proxyEndpoint) {
     const circuit = getCircuit(effectiveTier, proxyEndpoint);
 
@@ -192,7 +259,7 @@ export async function fetchViaProxy(
     }
 
     if (circuit.available === false) {
-      return fetchWithRetry(url, axiosOptions);
+      return _logOk(await fetchWithRetry(url, axiosOptions));
     }
 
     const [proxyHost, proxyPortStr] = proxyEndpoint.split(":");
@@ -206,7 +273,7 @@ export async function fetchViaProxy(
 
     if (circuit.available === true) {
       // Known-good: use proxy directly
-      return fetchWithRetry(url, { headers: { "User-Agent": getRandomUA(), "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.5", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive" }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...axiosOptions });
+      return _logOk(await fetchWithRetry(url, { headers: { "User-Agent": getRandomUA(), "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.5", "Accept-Encoding": "gzip, deflate, br", "Connection": "keep-alive" }, proxy: proxyConfig, timeout: TIMEOUTS.PROXY_FETCH, ...axiosOptions }));
     }
 
     // Unknown state: race proxy vs direct fetch — take the first successful response.
@@ -254,9 +321,13 @@ export async function fetchViaProxy(
       if (directResult.status === "fulfilled") return directResult.value;
       throw directResult.status === "rejected" ? directResult.reason : new Error("All fetch paths failed");
     });
-    return result as AxiosResponse;
+    return _logOk(result as AxiosResponse);
   }
-  return fetchWithRetry(url, axiosOptions);
+  return _logOk(await fetchWithRetry(url, axiosOptions));
+  } catch (err) {
+    logRequest({ tool: tool ?? "unknown", url, status: err instanceof AxiosError ? err.response?.status : undefined, ms: Date.now() - _proxyStartMs, mode: "proxy", error: err instanceof Error ? err.message : String(err) });
+    throw err;
+  }
 }
 
 /**
@@ -267,13 +338,14 @@ export async function fetchViaProxy(
 export async function fetchWithRender(
   url: string,
   scraperApiKey: string | undefined,
-  options: Partial<AxiosRequestConfig> & { country?: string; proxyTier?: "residential" | "datacenter" } = {}
+  options: Partial<AxiosRequestConfig> & { country?: string; proxyTier?: "residential" | "datacenter" } & FetchExtras = {}
 ): Promise<AxiosResponse> {
   // SSRF chokepoint: validate the target before it is handed to the unblocker or the
   // proxy fallback. The unblocker POST itself targets Novada's own endpoint.
   assertUrlSafe(url);
   const unblockerKey = getWebUnblockerKey();
-  const { country, proxyTier, ...axiosOptions } = options;
+  const { country, proxyTier, tool, __noLog, ...axiosOptions } = options;
+  const _renderStartMs = Date.now();
 
   if (unblockerKey) {
     // Web Unblocker API is intermittently flaky — inner data.code returns 403/502
@@ -281,6 +353,7 @@ export async function fetchWithRender(
     const MAX_RETRIES = 2;
     let lastError: Error | null = null;
 
+    try {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         const params = new URLSearchParams();
@@ -295,6 +368,7 @@ export async function fetchWithRender(
             headers: {
               "Content-Type": "application/x-www-form-urlencoded",
               "Authorization": `Bearer ${unblockerKey}`,
+              ...telemetryHeaders(tool),
             },
             timeout: TIMEOUTS.RENDER,
             maxContentLength: 10 * 1024 * 1024,
@@ -305,6 +379,7 @@ export async function fetchWithRender(
         );
         // Response format: { code: 0, data: { code: 200, html: "...", msg, msg_detail } }
         if (resp.data?.code === 0 && resp.data?.data?.html) {
+          if (!__noLog) logRequest({ tool: tool ?? "unknown", url, status: resp.data.data.code ?? resp.status, ms: Date.now() - _renderStartMs, mode: "render" });
           return { ...resp, data: resp.data.data.html };
         }
         // Inner code check — outer code=0 but inner data.code indicates a transient error
@@ -323,6 +398,7 @@ export async function fetchWithRender(
         if (resp.data?.code !== 0) {
           throw new Error(`Web Unblocker error: ${resp.data?.msg ?? "unknown"}`);
         }
+        if (!__noLog) logRequest({ tool: tool ?? "unknown", url, status: resp.status, ms: Date.now() - _renderStartMs, mode: "render" });
         return resp;
       } catch (error) {
         if (error instanceof AxiosError && error.message?.toLowerCase().includes("maxcontentlength")) {
@@ -345,10 +421,15 @@ export async function fetchWithRender(
     }
     // All retries exhausted
     throw lastError ?? new Error("Web Unblocker failed after retries");
+    } catch (err) {
+      if (!__noLog) logRequest({ tool: tool ?? "unknown", url, status: err instanceof AxiosError ? err.response?.status : undefined, ms: Date.now() - _renderStartMs, mode: "render", error: err instanceof Error ? err.message : String(err) });
+      throw err;
+    }
   }
 
-  // Fallback: no unblocker key configured — use proxy/direct fetch (best effort)
-  return fetchViaProxy(url, scraperApiKey, { ...axiosOptions, ...(proxyTier ? { proxyTier } : {}) });
+  // Fallback: no unblocker key configured — use proxy/direct fetch (best effort).
+  // Thread tool through so the fallback proxy fetch still carries telemetry + logs once.
+  return fetchViaProxy(url, scraperApiKey, { ...axiosOptions, ...(proxyTier ? { proxyTier } : {}), tool });
 }
 
 /** Detect if fetched HTML is a JS-required page (empty shell, Cloudflare, etc.) */

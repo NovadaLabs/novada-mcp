@@ -6,6 +6,22 @@ import { makeNovadaError, NovadaErrorCode } from "../_core/errors.js";
 
 const CRAWL_CONCURRENCY = 3;
 
+/** Best-effort progress callback (NOV-319). Wired to MCP `notifications/progress` at the
+ *  call site only when the client supplied a progressToken; otherwise undefined (no-op).
+ *  Implementations MUST NOT throw — callers swallow errors so progress never breaks a tool. */
+export type ProgressReporter = (info: { progress: number; total?: number; message?: string }) => void | Promise<void>;
+
+/** Invoke a progress reporter without ever letting it break the crawl. */
+async function reportProgress(
+  onProgress: ProgressReporter | undefined,
+  info: { progress: number; total?: number; message?: string }
+): Promise<void> {
+  if (!onProgress) return;
+  try {
+    await onProgress(info);
+  } catch { /* progress is best-effort — never surface reporter failures */ }
+}
+
 interface CrawlResult {
   url: string;
   title: string;
@@ -22,8 +38,8 @@ async function fetchPage(
 ): Promise<{ html: string; url: string } | null> {
   try {
     const response = useRender
-      ? await fetchWithRender(url, apiKey, { timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 })
-      : await fetchViaProxy(url, apiKey, { timeout: TIMEOUTS.CRAWL_STATIC, maxRedirects: 3 });
+      ? await fetchWithRender(url, apiKey, { tool: "crawl", timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 })
+      : await fetchViaProxy(url, apiKey, { tool: "crawl", timeout: TIMEOUTS.CRAWL_STATIC, maxRedirects: 3 });
     if (typeof response.data !== "string") return null;
     return { html: String(response.data), url };
   } catch {
@@ -141,7 +157,11 @@ export function shouldCrawlUrl(
   return true;
 }
 
-export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise<string> {
+export async function novadaCrawl(
+  params: CrawlParams,
+  apiKey?: string,
+  onProgress?: ProgressReporter
+): Promise<string> {
   // Support intuitive alias param names.
   // Hard cap is 20 for normal novada_crawl callers; site_copy raises it via the
   // internal _maxPagesCeiling (the public CrawlParamsSchema still enforces .max(20)).
@@ -233,6 +253,13 @@ export async function novadaCrawl(params: CrawlParams, apiKey?: string): Promise
 
       const jsContentMissing = jsMissing ? true : undefined;
       results.push({ url: batch[i].url, title, text, depth: batch[i].depth, wordCount, jsContentMissing });
+
+      // NOV-319: emit a per-page progress notification (no-op when no progressToken).
+      await reportProgress(onProgress, {
+        progress: results.length,
+        total: maxPages,
+        message: `Crawled ${results.length}/${maxPages}: ${batch[i].url}`,
+      });
 
       // Discover links, applying path filters before queuing
       const links = extractLinks(page.html, batch[i].url);

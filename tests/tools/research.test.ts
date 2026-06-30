@@ -119,3 +119,59 @@ describe("novadaResearch source extraction", () => {
     expect(result).toContain("extracted:");
   });
 });
+
+describe("novadaResearch progress notifications (NOV-319)", () => {
+  // Inline fast-path envelope the current search.ts parser expects:
+  // resp.data = { code:0, data: { data: { json: [ { rest: { organic: [...] } } ] } } }
+  // (parser reads body.data.data.json[0].rest.organic).
+  const searchEnvelope = (org: { title: string; url: string; description: string }[]) => ({
+    data: { code: 0, data: { data: { json: [{ rest: { organic: org } }] } } },
+    status: 200, headers: {}, config: {} as never, statusText: "OK",
+  });
+
+  it("emits 4 phase updates (search → collect → extract → synthesize) on the success path", async () => {
+    mockedAxios.post.mockResolvedValue(
+      searchEnvelope([{ title: "Src", url: "https://src.example.com", description: "About the topic" }])
+    );
+    mockedAxios.get.mockResolvedValue({
+      data: "<html><body><h1>Src</h1><p>" + "body text ".repeat(30) + "</p></body></html>",
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    });
+
+    const updates: { progress: number; total?: number; message?: string }[] = [];
+    await novadaResearch(
+      { question: "How do AI agents work?", depth: "quick" },
+      "test-key",
+      (info) => { updates.push(info); }
+    );
+
+    expect(updates.map(u => u.progress)).toEqual([1, 2, 3, 4]);
+    expect(updates.every(u => u.total === 4)).toBe(true);
+    expect(updates[0].message).toMatch(/Searching/i);
+    expect(updates[3].message).toMatch(/Synthesiz/i);
+  });
+
+  it("is a no-op without a callback and swallows reporter errors", async () => {
+    mockedAxios.post.mockResolvedValue(
+      searchEnvelope([{ title: "S", url: "https://s.example.com", description: "x" }])
+    );
+    mockedAxios.get.mockResolvedValue({
+      data: "<html><body><p>" + "w ".repeat(40) + "</p></body></html>",
+      status: 200, headers: {}, config: {} as never, statusText: "OK",
+    });
+
+    // no callback → must not throw
+    await expect(
+      novadaResearch({ question: "test topic here", depth: "quick" }, "test-key")
+    ).resolves.toBeTypeOf("string");
+
+    // throwing callback → must not break research
+    await expect(
+      novadaResearch(
+        { question: "test topic here", depth: "quick" },
+        "test-key",
+        () => { throw new Error("reporter blew up"); }
+      )
+    ).resolves.toBeTypeOf("string");
+  });
+});

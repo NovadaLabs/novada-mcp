@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { listPrompts, getPrompt, PROMPTS } from "../../src/prompts/index.js";
 
 describe("PROMPTS array", () => {
-  it("contains all 5 prompts", () => {
-    expect(PROMPTS).toHaveLength(5);
+  it("contains all 7 prompts", () => {
+    expect(PROMPTS).toHaveLength(7);
   });
 
   it("has correct names", () => {
@@ -13,13 +13,15 @@ describe("PROMPTS array", () => {
     expect(names).toContain("site_audit");
     expect(names).toContain("scrape_platform_data");
     expect(names).toContain("browser_stateful_workflow");
+    expect(names).toContain("novada-which-tool");
+    expect(names).toContain("novada-extract-format");
   });
 });
 
 describe("listPrompts()", () => {
-  it("returns all 5 prompts", () => {
+  it("returns all 7 prompts", () => {
     const result = listPrompts();
-    expect(result.prompts).toHaveLength(5);
+    expect(result.prompts).toHaveLength(7);
   });
 
   it("includes research_topic with description", () => {
@@ -279,6 +281,73 @@ describe("getPrompt() — browser_stateful_workflow", () => {
       workflow: longWorkflow,
     });
     expect(result.description).toContain("...");
+  });
+});
+
+describe("getPrompt() — novada-which-tool", () => {
+  it("includes the task in the message and description", () => {
+    const result = getPrompt("novada-which-tool", { task: "get all docs pages from a site" });
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].role).toBe("user");
+    expect(result.messages[0].content.text).toContain("get all docs pages from a site");
+    expect(result.description).toContain("get all docs pages from a site");
+  });
+
+  it("references the candidate tools in the decision tree", () => {
+    const text = getPrompt("novada-which-tool", { task: "x" }).messages[0].content.text;
+    for (const tool of [
+      "novada_search",
+      "novada_research",
+      "novada_extract",
+      "novada_map",
+      "novada_crawl",
+      "novada_scrape",
+      "novada_unblock",
+      "novada_browser",
+    ]) {
+      expect(text).toContain(tool);
+    }
+  });
+
+  it("cross-references the format prompt", () => {
+    const text = getPrompt("novada-which-tool", { task: "x" }).messages[0].content.text;
+    expect(text).toContain("novada-extract-format");
+  });
+
+  it("truncates a long task in the description", () => {
+    const longTask = "I need to figure out exactly which tool to use for this very specific and lengthy scraping task";
+    const result = getPrompt("novada-which-tool", { task: longTask });
+    expect(result.description).toContain("...");
+  });
+});
+
+describe("getPrompt() — novada-extract-format", () => {
+  it("works without a goal and returns a generic description", () => {
+    const result = getPrompt("novada-extract-format", {});
+    expect(result.messages).toHaveLength(1);
+    expect(result.description).toBe("novada_extract format decision tree");
+    expect(result.messages[0].content.text).not.toContain("Goal:");
+  });
+
+  it("includes the goal when provided", () => {
+    const result = getPrompt("novada-extract-format", { goal: "just the price and title" });
+    expect(result.messages[0].content.text).toContain("Goal: just the price and title");
+    expect(result.description).toContain("just the price and title");
+  });
+
+  it("explains json+fields vs markdown vs html", () => {
+    const text = getPrompt("novada-extract-format", {}).messages[0].content.text;
+    expect(text).toContain('format="json"');
+    expect(text).toContain('format="markdown"');
+    expect(text).toContain('format="html"');
+    expect(text).toContain("fields");
+    expect(text).toContain("clean=true");
+  });
+
+  it("treats a whitespace-only goal as no goal", () => {
+    const result = getPrompt("novada-extract-format", { goal: "   " });
+    expect(result.description).toBe("novada_extract format decision tree");
+    expect(result.messages[0].content.text).not.toContain("Goal:");
   });
 });
 

@@ -99,7 +99,7 @@ async function discoverViaLlmsTxt(
   ];
   for (const { method, path } of candidates) {
     try {
-      const resp = await fetchViaProxy(`${origin}${path}`, apiKey, { timeout: TIMEOUTS.SITEMAP });
+      const resp = await fetchViaProxy(`${origin}${path}`, apiKey, { tool: "site_copy", timeout: TIMEOUTS.SITEMAP });
       if (typeof resp.data !== "string") continue;
       const body = resp.data;
       // Guard: an HTML 404 page can be 200 + look like markdown — require it to not be an HTML doc.
@@ -120,13 +120,13 @@ async function fetchSitePage(
   const useRender = renderMode === "render";
   try {
     const resp = useRender
-      ? await fetchWithRender(url, apiKey, { timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 })
-      : await fetchViaProxy(url, apiKey, { timeout: TIMEOUTS.CRAWL_STATIC, maxRedirects: 3 });
+      ? await fetchWithRender(url, apiKey, { tool: "site_copy", timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 })
+      : await fetchViaProxy(url, apiKey, { tool: "site_copy", timeout: TIMEOUTS.CRAWL_STATIC, maxRedirects: 3 });
     let html = typeof resp.data === "string" ? resp.data : null;
     // auto: escalate to render once if the static HTML looks JS-heavy.
     if (html && renderMode === "auto" && detectJsHeavyContent(html)) {
       try {
-        const r = await fetchWithRender(url, apiKey, { timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 });
+        const r = await fetchWithRender(url, apiKey, { tool: "site_copy", timeout: TIMEOUTS.CRAWL_RENDER, maxRedirects: 3 });
         if (typeof r.data === "string") html = r.data;
       } catch { /* keep static html */ }
     }
@@ -204,7 +204,7 @@ async function discoverPages(
       batch.map(({ url, depth }) =>
         depth >= maxDepth
           ? Promise.resolve<string | null>(null)
-          : fetchViaProxy(url, apiKey, { timeout: TIMEOUTS.CRAWL_STATIC, maxRedirects: 3 })
+          : fetchViaProxy(url, apiKey, { tool: "site_copy", timeout: TIMEOUTS.CRAWL_STATIC, maxRedirects: 3 })
               .then(r => (typeof r.data === "string" ? r.data : null))
               .catch(() => null),
       ),

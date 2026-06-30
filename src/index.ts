@@ -51,6 +51,7 @@ import {
   validateScraperResultParams,
   validateBrowserFlowParams,
 } from "./tools/index.js";
+import type { ProgressReporter } from "./tools/crawl.js";
 import { classifyError, NovadaErrorCode } from "./_core/errors.js";
 import { ZodError } from "zod";
 import {
@@ -127,6 +128,14 @@ import {
   novadaIpWhitelist,
   validateIpWhitelistParams,
   IpWhitelistParamsSchema,
+  // NOV-321 / NOV-323: session telemetry + search feedback (in-memory, auth-free)
+  novadaSessionStats,
+  validateSessionStatsParams,
+  SessionStatsParamsSchema,
+  recordToolCall,
+  novadaSearchFeedback,
+  validateSearchFeedbackParams,
+  SearchFeedbackParamsSchema,
 } from "./tools/index.js";
 
 // ─── Configuration ───────────────────────────────────────────────────────────
@@ -163,6 +172,33 @@ const TOOLS = [
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
     inputSchema: zodToMcpSchema(SearchParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
+    // outputSchema (MCP 2025-06-18): describes the structured shape returned in format="json" mode.
+    outputSchema: {
+      type: "object",
+      properties: {
+        status: { type: "string", description: "'ok' on success" },
+        query: { type: "string" },
+        engine: { type: "string", description: "Engine that served the results" },
+        source: { type: "string", description: "'live' for fresh results" },
+        result_count: { type: "integer", description: "Number of results returned" },
+        results: {
+          type: "array",
+          description: "Ranked search results",
+          items: {
+            type: "object",
+            properties: {
+              rank: { type: "integer" },
+              title: { type: "string" },
+              url: { type: ["string", "null"] },
+              snippet: { type: "string" },
+              published: { type: "string", description: "Publish date when available" },
+            },
+            required: ["rank", "title", "url", "snippet"],
+          },
+        },
+      },
+      required: ["query", "engine", "result_count", "results"],
+    },
   },
   {
     name: "novada_extract",
@@ -185,6 +221,41 @@ By default returns full page content for maximum information. Add clean=true to 
 **Project grouping:** Pass \`project="my-project"\` to group all outputs in a subfolder (e.g. ~/Downloads/novada-mcp/2026-06-26/my-project/). Useful for multi-step research tasks.`,
     inputSchema: zodToMcpSchema(ExtractParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
+    // outputSchema (MCP 2025-06-18): describes the structured shape returned in format="json" mode (single-URL).
+    outputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string" },
+        title: { type: "string" },
+        description: { type: ["string", "null"] },
+        mode: { type: "string", description: "How the page was fetched: static | render | browser" },
+        source: { type: "string", description: "'live' or 'wayback'" },
+        fetched_at: { type: "string", description: "ISO timestamp of the fetch" },
+        quality: {
+          type: "object",
+          description: "Content quality assessment",
+          properties: {
+            score: { type: "number" },
+            label: { type: "string" },
+            content_ok: { type: "boolean" },
+          },
+        },
+        content: { type: "string", description: "Extracted page content (markdown or text)" },
+        content_truncated: { type: "boolean" },
+        returned_chars: { type: "integer" },
+        total_chars: { type: ["integer", "null"] },
+        structured_data: { description: "JSON-LD / structured data when present", type: ["object", "array", "null"] },
+        fields: { description: "Requested field extractions keyed by field name", type: ["object", "null"] },
+        links: {
+          type: "object",
+          properties: {
+            same_domain: { type: "array", items: { type: "string" } },
+            total: { type: "integer" },
+          },
+        },
+      },
+      required: ["url", "title", "mode", "content"],
+    },
   },
   {
     name: "novada_crawl",
@@ -229,6 +300,17 @@ Not for:
 **Note:** Limited results on JavaScript SPAs — will flag this in output.`,
     inputSchema: zodToMcpSchema(MapParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
+    // outputSchema (MCP 2025-06-18): the discovered URL set and its count.
+    outputSchema: {
+      type: "object",
+      properties: {
+        root: { type: "string", description: "Root URL the map started from" },
+        count: { type: "integer", description: "Number of URLs returned (after any search filter)" },
+        urls: { type: "array", description: "Discovered URLs", items: { type: "string" } },
+        discovery: { type: "string", description: "How URLs were found: sitemap | crawl" },
+      },
+      required: ["root", "count", "urls"],
+    },
   },
   {
     name: "novada_site_copy",
@@ -355,6 +437,22 @@ Not for:
 **Note:** Verdict is signal-based (search balance), not a definitive ruling. Confidence 0–100 indicates certainty.`,
     inputSchema: zodToMcpSchema(VerifyParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
+    // outputSchema (MCP 2025-06-18): the verdict and its supporting evidence.
+    outputSchema: {
+      type: "object",
+      properties: {
+        claim: { type: "string", description: "The claim that was checked" },
+        verdict: {
+          type: "string",
+          description: "Signal-based verdict from search balance",
+          enum: ["supported", "unsupported", "contested", "insufficient_data"],
+        },
+        confidence: { type: "integer", description: "0 = completely uncertain, 100 = all evidence agrees", minimum: 0, maximum: 100 },
+        supporting_evidence_count: { type: "integer", description: "Number of relevant supporting sources" },
+        contradicting_evidence_count: { type: "integer", description: "Number of relevant contradicting sources" },
+      },
+      required: ["claim", "verdict", "confidence"],
+    },
   },
   {
     name: "novada_unblock",
@@ -437,10 +535,11 @@ Not for:
 
 **Best for:** Scraping URLs that require async processing (JS-heavy pages, rate-limited targets, long-running extractions).
 **Workflow:** submit → poll status → retrieve result. Three separate calls.
-**Required:** url (the page to scrape). Optional: scraper_type (default 'universal'), country (2-letter ISO code).
+**Params:** platform (the scraper domain, e.g. 'amazon.com'), operation (the operation ID for that platform), and optional params (operation-specific key/values). These three are the ONLY accepted fields — this tool takes no category/type selector; the platform + operation pair alone determines what runs.
+**Valid platform values (scraper_name):** amazon.com, walmart.com, google.com, bing.com, duckduckgo.com, yandex.com, x.com, tiktok.com, instagram.com, facebook.com, youtube.com, linkedin.com, github.com. Read novada://scraper-platforms for the full operation IDs per platform.
 **Next step:** After calling this tool, use novada_scraper_status with the returned task_id to check progress.
-**Note:** If the endpoint returns a placeholder task_id, contact Novada support at support@novada.com to confirm scraper_type availability.
-**Alternative:** For 13 active platforms (Amazon, Reddit, TikTok), use novada_scrape instead — it's synchronous and returns results directly.`,
+**Note:** If the endpoint returns a placeholder task_id, contact Novada support at support@novada.com to confirm operation availability.
+**Alternative:** For the 13 active platforms above (Amazon, TikTok, LinkedIn…), use novada_scrape instead — it's synchronous and returns results directly.`,
     inputSchema: zodToMcpSchema(ScraperSubmitParamsSchema),
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: true },
   },
@@ -492,11 +591,12 @@ Not for:
   },
   {
     name: "novada_monitor",
-    description: `Detect changes on a web page over time. Extracts content, computes a hash, compares with previous check. Returns changed/unchanged + field-level diffs.
+    description: `⚠️ Session-scoped only: state lost on server restart — baselines live in memory for the MCP session, not persisted to disk. For persistent, cross-session monitoring, schedule recurring novada_monitor (or novada_scrape) calls from your own job runner and diff/store results externally; this tool itself keeps no durable state.
+
+Detect changes on a web page over time. Extracts content, computes a hash, compares with previous check. Returns changed/unchanged + field-level diffs.
 
 **Use for:** E-commerce price monitoring, stock availability tracking, content change detection, competitive pricing alerts.
 **How:** First call = baseline. Subsequent calls compare against baseline and report changes. Pass fields=["price","availability"] for field-level diffs with % change.
-**Session-scoped:** State lives in memory for the MCP session duration. Not persisted across restarts.
 **Not for:** One-time extraction (novada_extract), full crawl (novada_crawl).`,
     inputSchema: zodToMcpSchema(MonitorParamsSchema),
     annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: true },
@@ -587,6 +687,7 @@ Output pipeline supports optional project folders for grouping related queries.`
     name: "novada_capture_logs",
     description: `Paginated capture-task logs. Wraps developer-api POST /v1/capture/logs.
 
+**What "Capture" means:** Novada's async Capture API (managed capture/collection jobs run on your account) — NOT web scraping. For scraping use novada_scrape / novada_scraper_submit; this tool only reads the logs of Capture jobs.
 **Best for:** Auditing what was captured, debugging failed capture jobs.
 **Params:** start_time/end_time (YYYY-MM-DD, optional — emits both start_time AND strat_time), page, page_size (max 200), status filter.
 **Auth:** NOVADA_DEVELOPER_API_KEY (falls back to NOVADA_API_KEY).`,
@@ -614,6 +715,27 @@ Output pipeline supports optional project folders for grouping related queries.`
     inputSchema: zodToMcpSchema(IpWhitelistParamsSchema),
     annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: false },
   },
+  // ─── NOV-321 / NOV-323: session telemetry + search feedback ───────────────
+  {
+    name: "novada_session_stats",
+    description: `Return per-process / per-session usage telemetry: tool-call counts, the last-N calls, and process uptime.
+
+**Best for:** "What have I called this session?" / debugging an agent loop / seeing which Novada tools dominate usage.
+**Returns:** session_started, uptime, total_calls, per-tool counts (high→low), and the most-recent calls (newest first, capped by recent_limit).
+**Scope:** In-memory, per-process — resets when the MCP server restarts. Nothing is persisted to disk and nothing leaves the process. Auth-free (no API key needed).`,
+    inputSchema: zodToMcpSchema(SessionStatsParamsSchema),
+    annotations: { readOnlyHint: true, idempotentHint: true, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "novada_search_feedback",
+    description: `Record search-result quality so future ranking can learn from it. Returns a thank-you/echo confirmation with an agent_instruction.
+
+**Best for:** After a novada_search call, tell Novada which result URLs were useful and rate the set (good/ok/bad). The signal biases future ranking.
+**Params:** search_id (the prior search's id), query, rating ('good'|'ok'|'bad'), useful_urls? (results you clicked/cited, max 50), note? (what was missing).
+**Scope:** In-memory feedback store, per-process — resets when the MCP server restarts. Nothing is persisted to disk. Auth-free (no API key needed).`,
+    inputSchema: zodToMcpSchema(SearchFeedbackParamsSchema),
+    annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false, openWorldHint: false },
+  },
 ];
 
 // ─── Tool & Group Filtering ──────────────────────────────────────────────────
@@ -623,11 +745,11 @@ Output pipeline supports optional project folders for grouping related queries.`
 
 /** Category bundles — each group name expands to multiple tools */
 const CATEGORY_MAP: Record<string, string[]> = {
-  search:  ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_site_copy", "novada_research", "novada_verify", "novada_ai_monitor", "novada_monitor"],
+  search:  ["novada_search", "novada_extract", "novada_crawl", "novada_map", "novada_site_copy", "novada_research", "novada_verify", "novada_ai_monitor", "novada_monitor", "novada_search_feedback"],
   proxy:   ["novada_proxy", "novada_proxy_residential", "novada_proxy_isp", "novada_proxy_datacenter", "novada_proxy_mobile", "novada_proxy_static", "novada_proxy_dedicated"],
   browser: ["novada_browser", "novada_browser_flow"],
   scraper: ["novada_scrape", "novada_scraper_submit", "novada_scraper_status", "novada_scraper_result"],
-  health:  ["novada_health", "novada_health_all", "novada_discover", "novada_setup"],
+  health:  ["novada_health", "novada_health_all", "novada_discover", "novada_setup", "novada_session_stats"],
   account: ["novada_wallet_balance", "novada_wallet_usage_record", "novada_proxy_account_create", "novada_proxy_account_list", "novada_traffic_daily", "novada_plan_balance_all", "novada_capture_logs", "novada_account_summary", "novada_ip_whitelist"],
 };
 
@@ -665,9 +787,12 @@ function applyToolFilter(tools: typeof TOOLS): typeof TOOLS {
     }
   }
 
-  // Always include health + setup so agents can diagnose issues regardless of filter
+  // Always include health + setup so agents can diagnose issues regardless of filter.
+  // session_stats + search_feedback are auth-free and in-memory — keep them reachable too.
   allowed.add("novada_health");
   allowed.add("novada_setup");
+  allowed.add("novada_session_stats");
+  allowed.add("novada_search_feedback");
 
   const filtered = tools.filter(t => allowed.has(t.name));
 
@@ -734,8 +859,22 @@ class NovadaMCPServer {
       return readResource(request.params.uri) as any;
     });
 
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       const { name, arguments: args } = request.params;
+
+      // NOV-319: build a per-request progress reporter wired to notifications/progress.
+      // Only active when the client supplied a progressToken in _meta; otherwise no-op so
+      // long-running tools (novada_crawl per page, novada_research per phase) stay silent.
+      const progressToken = extra?._meta?.progressToken;
+      const onProgress: ProgressReporter | undefined =
+        progressToken === undefined
+          ? undefined
+          : async (info) => {
+              await extra.sendNotification({
+                method: "notifications/progress",
+                params: { progressToken, ...info },
+              });
+            };
 
       // novada_setup is auth-free — handle it before the API_KEY gate
       if (name === "novada_setup") {
@@ -743,6 +882,38 @@ class NovadaMCPServer {
           const result = novadaSetup(validateSetupParams(args as Record<string, unknown>));
           return { content: [{ type: "text" as const, text: result }] };
         } catch (e) {
+          return { content: [{ type: "text" as const, text: String(e) }], isError: true };
+        }
+      }
+
+      // NOV-321 / NOV-323: session telemetry + search feedback are in-memory and
+      // auth-free — handle them before the API_KEY gate. recordToolCall makes
+      // each invocation show up in the telemetry it reports.
+      if (name === "novada_session_stats") {
+        try {
+          recordToolCall(name);
+          const result = await novadaSessionStats(validateSessionStatsParams(args as Record<string, unknown>));
+          return { content: [{ type: "text" as const, text: result }] };
+        } catch (e) {
+          return { content: [{ type: "text" as const, text: String(e) }], isError: true };
+        }
+      }
+      if (name === "novada_search_feedback") {
+        try {
+          recordToolCall(name);
+          const result = await novadaSearchFeedback(validateSearchFeedbackParams(args as Record<string, unknown>));
+          return { content: [{ type: "text" as const, text: result }] };
+        } catch (e) {
+          if (e instanceof ZodError) {
+            const issues = e.issues.map(i => `  ${i.path.join(".")}: ${i.message}`).join("\n");
+            return {
+              content: [{
+                type: "text" as const,
+                text: `Invalid parameters for ${name}:\n${issues}\nNext step: Check parameter names and values — see tool description for valid options.`,
+              }],
+              isError: true,
+            };
+          }
           return { content: [{ type: "text" as const, text: String(e) }], isError: true };
         }
       }
@@ -793,6 +964,9 @@ class NovadaMCPServer {
       try {
         let result: string;
 
+        // NOV-321: record every dispatched tool call for novada_session_stats telemetry.
+        recordToolCall(name);
+
         switch (name) {
           case "novada_search":
             result = await novadaSearch(validateSearchParams(args as Record<string, unknown>), API_KEY!);
@@ -801,10 +975,10 @@ class NovadaMCPServer {
             result = await novadaExtract(validateExtractParams(args as Record<string, unknown>), API_KEY!);
             break;
           case "novada_crawl":
-            result = await novadaCrawl(validateCrawlParams(args as Record<string, unknown>), API_KEY!);
+            result = await novadaCrawl(validateCrawlParams(args as Record<string, unknown>), API_KEY!, onProgress);
             break;
           case "novada_research":
-            result = await novadaResearch(validateResearchParams(args as Record<string, unknown>), API_KEY!);
+            result = await novadaResearch(validateResearchParams(args as Record<string, unknown>), API_KEY!, onProgress);
             break;
           case "novada_map":
             result = await novadaMap(validateMapParams(args as Record<string, unknown>), API_KEY!);
@@ -906,7 +1080,7 @@ class NovadaMCPServer {
             return {
               content: [{
                 type: "text" as const,
-                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_unblock, novada_browser, novada_health, novada_health_all, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_setup, novada_wallet_balance, novada_wallet_usage_record, novada_proxy_account_create, novada_proxy_account_list, novada_traffic_daily, novada_plan_balance_all, novada_capture_logs, novada_ip_whitelist`,
+                text: `Unknown tool: ${name}. Available: novada_search, novada_extract, novada_crawl, novada_research, novada_map, novada_site_copy, novada_scrape, novada_proxy, novada_proxy_residential, novada_proxy_isp, novada_proxy_datacenter, novada_proxy_mobile, novada_proxy_static, novada_proxy_dedicated, novada_verify, novada_unblock, novada_browser, novada_health, novada_health_all, novada_discover, novada_scraper_submit, novada_scraper_status, novada_scraper_result, novada_browser_flow, novada_setup, novada_wallet_balance, novada_wallet_usage_record, novada_proxy_account_create, novada_proxy_account_list, novada_traffic_daily, novada_plan_balance_all, novada_capture_logs, novada_ip_whitelist, novada_session_stats, novada_search_feedback`,
               }],
               isError: true,
             };
@@ -1033,6 +1207,8 @@ Tools (${TOOLS.length}):
   novada_scraper_result      Retrieve completed scraping results by task_id
   novada_browser_flow        Cloud browser automation via action sequence API
   novada_ip_whitelist        Manage IP whitelist for proxy products (add/list/del/remark)
+  novada_session_stats       Per-session usage telemetry (tool-call counts, recent calls, uptime)
+  novada_search_feedback     Record search-result quality to improve future ranking
 `);
   process.exit(0);
 }

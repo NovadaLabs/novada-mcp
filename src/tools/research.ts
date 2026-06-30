@@ -3,6 +3,22 @@ import { saveOutput } from "../utils/output.js";
 import type { ResearchParams, NovadaSearchResult } from "./types.js";
 import { novadaExtract } from "./extract.js";
 import { submitSearchScrapeTask, resolveSearchResults } from "./search.js";
+import type { ProgressReporter } from "./crawl.js";
+
+/** Invoke a progress reporter without ever letting it break research (NOV-319). */
+async function reportProgress(
+  onProgress: ProgressReporter | undefined,
+  info: { progress: number; total?: number; message?: string }
+): Promise<void> {
+  if (!onProgress) return;
+  try {
+    await onProgress(info);
+  } catch { /* progress is best-effort — never surface reporter failures */ }
+}
+
+/** Phase sequence reported via notifications/progress. Fixed total so clients render a
+ *  determinate 4-step bar; the seed search phase is reported before queries run. */
+const RESEARCH_PHASES = 4;
 
 // ─── Engine Fallback ──────────────────────────────────────────────────────
 // Primary engine first (cheapest — 1 API call). On failure, race 2 fallback
@@ -84,7 +100,11 @@ const DOMAIN_SUFFIXES: Record<QuestionDomain, string[]> = {
 
 // ─── Main Research Function ────────────────────────────────────────────────
 
-export async function novadaResearch(params: ResearchParams, apiKey: string): Promise<string> {
+export async function novadaResearch(
+  params: ResearchParams,
+  apiKey: string,
+  onProgress?: ProgressReporter
+): Promise<string> {
   // Support 'query' as alias for 'question' (matches other tools' param naming)
   if (!params.question && params.query) {
     params = { ...params, question: params.query };
@@ -95,6 +115,13 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
   const isComprehensive = resolvedDepth === "comprehensive";
 
   const queries = generateSearchQueries(params.question ?? "", isDeep, isComprehensive, params.focus);
+
+  // NOV-319 phase 1/4: searching (no-op when no progressToken).
+  await reportProgress(onProgress, {
+    progress: 1,
+    total: RESEARCH_PHASES,
+    message: `Searching the web (${queries.length} queries)`,
+  });
 
   // Execute all searches in parallel — each query races all 3 engines simultaneously
   const allResults = await Promise.all(
@@ -146,6 +173,13 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
   }
 
   const sources = [...uniqueSources.values()].slice(0, 15);
+
+  // NOV-319 phase 2/4: sources collected & deduped.
+  await reportProgress(onProgress, {
+    progress: 2,
+    total: RESEARCH_PHASES,
+    message: `Collected ${sources.length} unique sources from ${succeededCount}/${queries.length} queries`,
+  });
 
   // Phase 2: Extract top 5 source URLs for full content (up from 3)
   const topSources = sources.slice(0, 5);
@@ -207,6 +241,13 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
     }
   }
 
+  // NOV-319 phase 3/4: top sources extracted.
+  await reportProgress(onProgress, {
+    progress: 3,
+    total: RESEARCH_PHASES,
+    message: `Extracted ${extractedContents.length} full source(s), ${extractFailedSources.length} snippet-only`,
+  });
+
   const topic = params.question ?? "";
   const queryValue = params.query ?? params.question ?? "";
   const depthValue = resolvedDepth;
@@ -232,6 +273,13 @@ export async function novadaResearch(params: ResearchParams, apiKey: string): Pr
       `agent_instruction: status:search_unavailable | action: call novada_health_all() to diagnose, then activate_scraper_api | question_not_answered: true`,
     ].join("\n");
   }
+
+  // NOV-319 phase 4/4: synthesizing the cited report.
+  await reportProgress(onProgress, {
+    progress: 4,
+    total: RESEARCH_PHASES,
+    message: "Synthesizing cited report",
+  });
 
   // Build structured synthesis from extracted contents + snippet fallbacks
   const summaryText = synthesizeAnswer(topic, extractedContents, extractFailedSources, sources);
