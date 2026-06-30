@@ -146,7 +146,7 @@
       <span class="zh">Novada MCP 更新日志</span>
       <span class="en">Novada MCP Update Log</span>
     </h1>
-    <div class="sub">npm v0.8.7 · hosted v0.8.7 · 2026-06-30 · 40+ tools · 14-chapter docs · 100% Firecrawl coverage</div>
+    <div class="sub">npm v0.8.8 · hosted v0.8.8 · 2026-06-30 · 40+ tools · 14-chapter docs · 100% Firecrawl coverage</div>
     <div class="pills">
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">P50 738ms <span class="zh">（↑9.6×）</span><span class="en">(↑9.6×)</span></span>
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">47K chars <span class="zh">（↑14×）</span><span class="en">(↑14×)</span></span>
@@ -154,8 +154,8 @@
       <span class="pill" style="background:rgba(90,122,154,0.25);color:#b8d0f0;">40+ <span class="zh">工具</span><span class="en">tools</span></span>
       <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">14 <span class="zh">章文档</span><span class="en">doc chapters</span></span>
       <span class="pill">30+ bug fixes</span>
-      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">npm v0.8.7</span>
-      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">hosted v0.8.7</span>
+      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">npm v0.8.8</span>
+      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">hosted v0.8.8</span>
     </div>
   </div>
 
@@ -169,9 +169,33 @@
   <!-- v0.8.5 OPTIMIZATION RELEASE — 2026-06-29                    -->
   <!-- ============================================================ -->
   <!-- ============================================================ -->
-  <!-- v0.8.7 SECURITY + PERF — 2026-06-30                         -->
+  <!-- v0.8.8 SECURITY HOTFIX + QA FIXES — 2026-06-30             -->
   <!-- ============================================================ -->
   <details class="card" open style="border-left: 4px solid var(--red);">
+    <summary>
+      <span class="date">2026-06-30</span>
+      <span class="tag tag-fix"><span class="zh">安全 + QA</span><span class="en">Security + QA</span></span>
+      <span>
+        <span class="zh">v0.8.8 — 安全热修(凭证脱敏)+ 实测 QA 修复</span>
+        <span class="en">v0.8.8 — security hotfix (credential redaction) + live-QA fixes</span>
+      </span>
+      <span class="chip" style="background:var(--red-light);color:var(--red);">v0.8.8</span>
+    </summary>
+    <div class="body">
+      <ul>
+        <li><b>🔒 <span class="zh">安全</span><span class="en">Security</span></b> <span class="zh">extract 报错不再泄漏 Browser 凭证 / 内部主机(redactSecrets 接入 npm + 托管两端)—— 线上 mcp.novada.com 已修</span><span class="en"> extract errors no longer leak Browser credentials / internal hosts (redactSecrets wired through npm + hosted) — fixed live on mcp.novada.com</span></li>
+        <li><span class="zh">extract:render 失败回退到静态结果(不再返回空)· verify:假 / 胡言乱语不再判 supported · search:bing 标记降级、num 上下限、空白查询拦截</span><span class="en"> extract render-fallback (no more empty) · verify no longer 'supported' for false/gibberish · search: bing degraded, num cap/floor, whitespace rejected</span></li>
+        <li><span class="zh">crawl:select_paths 只过滤子链接(种子必爬)· 托管:超时返结构化 JSON-RPC(不再裸 504)· scrape:操作 / 参数预校验</span><span class="en"> crawl: select_paths filters children only (seed always crawled) · hosted: timeouts return structured JSON-RPC (no bare 504) · scrape: op/param pre-flight</span></li>
+        <li><span class="zh">SDK langchain-novada 0.1.1:sync get_tools() 在事件循环里不再崩</span><span class="en"> SDK langchain-novada 0.1.1: sync get_tools() no longer crashes inside a running event loop</span></li>
+      </ul>
+      <div class="note"><span class="zh">实测 QA(6 个 tester 用真实 key 实打)发现 22 项 → 本批修 17,零回归(38 失败 / 815 通过,优于基线)。独立安全 + 正确性复审确认 #2 不再泄漏。</span><span class="en">Live QA (6 testers, real key) found 22 issues → 17 fixed here, zero regressions (38 failed / 815 passed, better than baseline). Independent security + correctness review confirmed #2 no longer leaks.</span></div>
+    </div>
+  </details>
+
+  <!-- ============================================================ -->
+  <!-- v0.8.7 SECURITY + PERF — 2026-06-30                         -->
+  <!-- ============================================================ -->
+  <details class="card" style="border-left: 4px solid var(--red);">
     <summary>
       <span class="date">2026-06-30</span>
       <span class="tag tag-fix"><span class="zh">安全 + 性能</span><span class="en">Security + Perf</span></span>
