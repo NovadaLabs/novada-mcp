@@ -232,9 +232,12 @@ describe("novadaVerify", () => {
     expect(out).toContain("one search query failed");
   });
 
-  it("rejects empty claim with a structured error", async () => {
-    const out = await novadaVerify({ claim: "   " } as never, API_KEY);
-    expect(out).toContain('"verdict":"error"');
+  it("rejects empty claim by throwing a NovadaError (INVALID_PARAMS)", async () => {
+    // FIX-4: empty/whitespace claim now throws NovadaError instead of returning a JSON string
+    await expect(novadaVerify({ claim: "   " } as never, API_KEY)).rejects.toMatchObject({
+      name: "NovadaError",
+      code: "INVALID_PARAMS",
+    });
   });
 
   it("runs all 3 queries (resolve called 3 times) with distinct angled queries", async () => {

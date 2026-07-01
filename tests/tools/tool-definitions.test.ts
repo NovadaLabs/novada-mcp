@@ -1,10 +1,13 @@
 /**
  * Tool-definition invariants for the ListTools surface (src/index.ts `TOOLS` array).
  *
- * Covers NOV-326 + NOV-324:
+ * Covers NOV-326 + NOV-324 + NOV-662:
  *   1. Every tool definition declares `annotations` (readOnly/destructive/idempotent/openWorld hints).
- *   2. The CORE read tools (search, extract, map, verify) declare an `outputSchema`
- *      (MCP spec 2025-06-18) whose top-level type is "object".
+ *   2. NOV-662: No tool may declare `outputSchema` unless its handler returns `structuredContent`.
+ *      Since no handler in this codebase returns `structuredContent`, the invariant is:
+ *      `outputSchema` must be absent from every tool definition. Any re-introduction without
+ *      a matching `structuredContent` handler causes strict MCP clients (Claude Code) to
+ *      reject calls with -32600. See NOV-662.
  *   3. novada_monitor's description opens with the session-scope limitation.
  *   4. novada_scraper_submit's description documents the REAL params (platform/operation/
  *      params) and does NOT advertise a non-existent `scraper_type` param (NOV-324).
@@ -71,18 +74,18 @@ describe("tool definitions (src/index.ts TOOLS)", () => {
     expect(missing, `tools missing openWorldHint: ${missing.join(", ")}`).toEqual([]);
   });
 
-  it.each(["novada_search", "novada_extract", "novada_map", "novada_verify"])(
-    "core read tool %s declares an object outputSchema (NOV-326)",
-    (toolName) => {
-      const seg = segments.find(s => s.name === toolName);
-      expect(seg, `${toolName} not found in TOOLS`).toBeTruthy();
-      expect(/outputSchema:\s*\{/.test(seg!.body), `${toolName} missing outputSchema`).toBe(true);
-      // Accurate-to-spec: outputSchema must be a JSON object schema.
-      expect(/outputSchema:\s*\{\s*type:\s*"object"/.test(seg!.body)).toBe(true);
-      // Must enumerate at least one property.
-      expect(/properties:\s*\{/.test(seg!.body)).toBe(true);
-    }
-  );
+  it("no tool declares outputSchema without a matching structuredContent handler (NOV-662)", () => {
+    // The CallTool handler in src/index.ts always returns { content:[{type:"text",text:result}] }
+    // and never returns structuredContent. Per MCP spec, a tool declaring outputSchema MUST
+    // return matching structuredContent — otherwise strict clients (Claude Code) reject every
+    // call with -32600. Until structuredContent support is added, outputSchema must be absent
+    // from all tool definitions.
+    const withOutputSchema = segments.filter(s => /outputSchema:\s*\{/.test(s.body)).map(s => s.name);
+    expect(
+      withOutputSchema,
+      `Tools re-introduced outputSchema without structuredContent support (see NOV-662): ${withOutputSchema.join(", ")}`,
+    ).toEqual([]);
+  });
 
   it("novada_monitor description opens with the session-scope limitation (NOV-324)", () => {
     const seg = segments.find(s => s.name === "novada_monitor");

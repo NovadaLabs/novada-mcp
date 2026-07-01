@@ -211,9 +211,10 @@ const PUBLIC_NOVADA_HOSTS = new Set([
 /**
  * P0 SECURITY (#2): strip secrets that an upstream error can leak in plaintext —
  * URL userinfo (`https://user:pass@host` → `https://host`), the literal
- * NOVADA_BROWSER_WS value, and internal `*.novada.com` host strings that aren't
- * on the public allowlist. Runs on EVERY error message + agent_instruction
- * before it reaches the caller.
+ * NOVADA_BROWSER_WS value, internal `*.novada.com` host strings not on the public
+ * allowlist, proxy usernames (Novada format patterns), and local filesystem paths
+ * (/Users/…, /home/…). Runs on EVERY error message + agent_instruction before it
+ * reaches the caller.
  */
 export function redactSecrets(msg: string): string {
   let out = msg;
@@ -236,6 +237,17 @@ export function redactSecrets(msg: string): string {
   out = out.replace(/\b(?:[a-z0-9-]+\.)+novada\.com\b/gi, (host) =>
     PUBLIC_NOVADA_HOSTS.has(host.toLowerCase()) ? host : "[novada-internal-host]"
   );
+
+  // 4. Proxy usernames: Novada format patterns like `customer-x-zone-res`,
+  //    `user-xyz-zone-isp`, or any `*-zone-(res|isp|mob|dcp|static|dedicated)` token.
+  out = out.replace(
+    /\b[a-zA-Z0-9_-]+-zone-(?:res|isp|mob|dcp|static|dedicated)\S*/g,
+    "[proxy-username]"
+  );
+
+  // 5. Local filesystem paths: /Users/… and /home/… — strip to avoid leaking
+  //    the operator's username or directory structure in error messages.
+  out = out.replace(/\/(?:Users|home)\/[^\s"')]+/g, "[local-path]");
 
   return out;
 }

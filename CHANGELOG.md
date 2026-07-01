@@ -4,6 +4,41 @@ All notable changes are recorded here in reverse chronological order.
 
 ---
 
+## [0.9.0] — 2026-07-01
+
+Consolidation release. Merges the red-team hardening campaign into a single version and supersedes the 0.8.5–0.8.10 line (NOV-578 series), which shipped to npm without individual changelog entries.
+
+### Security / data-leak (Taxonomy B — NOV-674)
+- **Path + PII redaction**: `/Users/…` and `/home/…` in any error/output → `[local-path]` (single-boundary `redactSecrets`).
+- **Proxy username masking**: masked across url/env/curl formats × `novada_proxy` / `novada_proxy_static` / `novada_proxy_dedicated`; zone-suffixed usernames in error text → `[proxy-username]`; usage examples use a `<PROXY_USER>` placeholder.
+- **Auth classification**: developer-API codes 401 / 11000 / 10002 → `INVALID_API_KEY` (failure_class=auth, retry_recommended=false) instead of a misleading not_found / invalid_params.
+- **Input caps at the schema boundary**: query ≤ 500 chars, research question ≤ 2000, scraper payload ≤ 60 KB — rejected synchronously before any HTTP call.
+- **`novada_unblock` timeout ceiling**: `Math.min(timeout, 120_000)` + `Promise.race` guard — no more transport `-32001`.
+- **`novada_verify` injection rejection**: CRLF / null-byte / `javascript:` claims rejected; HTML sanitized so no false `supported` verdict.
+
+### Schema-contract integrity (Taxonomy A — NOV-673)
+- **`required[]` correctness**: defaulted params no longer appear in JSON-Schema `required[]` across ~25 tools (root-caused to Zod v4 `toJSONSchema()` verbatim passthrough).
+- Removed false `additionalProperties:false`; removed `outputSchema` where no `structuredContent` was returned (fixes `-32600`); `idempotentHint:false` on `novada_monitor` / `novada_verify`.
+- Global ZodError handler now emits `agent_instruction`.
+- Deleted dead `mode` / `limit` crawl aliases (undocumented, no backend support).
+
+### Fixed (NOV-662–666)
+- outputSchema/structuredContent contract on search/extract/map/verify.
+- `novada_scraper_status` / `novada_scraper_result`: propagation-aware `not_found` (checks task existence on the primary `!downloadUrl` branch + code 10000).
+
+### Improved (NOV-668–672)
+- **Kufer/webbasys availability**: detects CSS-sprite course status (skips `<a>` link text; keys on a recognized status keyword) — no more false "available" on `ausgebucht` courses.
+- **German label-value tables**: 50-entry `GERMAN_LABEL_MAP` wired into infobox + label-value row extraction (Beginn/Status/Anmeldeschluss/…); table cell cap 200, `<dl>` cap 80.
+- Batch `novada_extract` returns a compact inline summary; `truncatePreservingTable` keeps bottom-of-page tables intact; contextual `agent_instruction`.
+
+### Fixed (FIX-5)
+- `novada_health` / `novada_health_all`: env vars set-but-unprobed now render **"configured (not verified)"** (`configured_unverified` status) instead of a misleading **"active"**. Env-absent still shows "not configured".
+
+### Process
+- Fix / verify / orchestrator separation (never self-verify); 50 Sonnet-4.6 red-team agents → 165 findings → 2 taxonomies; 3 fix groups × 3 independent live-verify groups with real credentials.
+
+---
+
 ## [0.8.4] — 2026-04-25 (pending review)
 
 ### Added

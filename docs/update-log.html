@@ -146,7 +146,7 @@
       <span class="zh">Novada MCP 更新日志</span>
       <span class="en">Novada MCP Update Log</span>
     </h1>
-    <div class="sub">npm v0.8.9 · hosted v0.8.9 · 2026-06-30 · 40+ tools · 14-chapter docs · 100% Firecrawl coverage</div>
+    <div class="sub">npm v0.9.0 · hosted v0.9.0 · 2026-07-01 · 40+ tools · 14-chapter docs · 100% Firecrawl coverage</div>
     <div class="pills">
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">P50 738ms <span class="zh">（↑9.6×）</span><span class="en">(↑9.6×)</span></span>
       <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">47K chars <span class="zh">（↑14×）</span><span class="en">(↑14×)</span></span>
@@ -154,8 +154,8 @@
       <span class="pill" style="background:rgba(90,122,154,0.25);color:#b8d0f0;">40+ <span class="zh">工具</span><span class="en">tools</span></span>
       <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">14 <span class="zh">章文档</span><span class="en">doc chapters</span></span>
       <span class="pill">30+ bug fixes</span>
-      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">npm v0.8.9</span>
-      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">hosted v0.8.9</span>
+      <span class="pill" style="background:rgba(90,138,94,0.25);color:#b8f0bb;">npm v0.9.0</span>
+      <span class="pill" style="background:rgba(122,106,154,0.25);color:#d0b8f0;">hosted v0.9.0</span>
     </div>
   </div>
 
@@ -169,9 +169,33 @@
   <!-- v0.8.5 OPTIMIZATION RELEASE — 2026-06-29                    -->
   <!-- ============================================================ -->
   <!-- ============================================================ -->
+  <!-- v0.9.0 HARDENING + RED-TEAM CONSOLIDATION — 2026-07-01       -->
+  <!-- ============================================================ -->
+  <details class="card" open style="border-left: 4px solid var(--red);">
+    <summary>
+      <span class="date">2026-07-01</span>
+      <span class="tag tag-fix"><span class="zh">安全 + 契约</span><span class="en">Security + Contract</span></span>
+      <span>
+        <span class="zh">v0.9.0 — 红队合并批:数据泄漏加固 + Schema 契约修复 + 德语抓取增强(3 组修复 × 3 组独立验证)</span>
+        <span class="en">v0.9.0 — red-team consolidation: data-leak hardening + schema-contract fixes + German-scrape improvements (3 fix groups × 3 independent verify groups)</span>
+      </span>
+      <span class="chip" style="background:var(--red-light);color:var(--red);">v0.9.0</span>
+    </summary>
+    <div class="body">
+      <ul>
+        <li><b>🔒 <span class="zh">安全 / 数据泄漏</span><span class="en">Security / data-leak</span></b> <span class="zh">本地路径 + PII 脱敏(<code>/Users/</code>、<code>/home/</code> → <code>[local-path]</code>)· 代理用户名在 url/env/curl 三格式 × proxy/static/dedicated 三工具全脱敏 · 鉴权分类(401/11000/10002 → INVALID_API_KEY)</span><span class="en"> local-path + PII redaction (<code>/Users/</code>, <code>/home/</code> → <code>[local-path]</code>) · proxy username masked across url/env/curl × proxy/static/dedicated · auth classification (401/11000/10002 → INVALID_API_KEY)</span></li>
+        <li><span class="zh">输入上限(query 500 / question 2000 / scraper 载荷 60KB)· unblock 超时上限 120s(不再 −32001)· verify 注入拦截(CRLF / 空字节 / javascript:)</span><span class="en"> input caps (query 500 / question 2000 / scraper payload 60KB) · unblock 120s timeout ceiling (no more −32001) · verify injection rejection (CRLF / null-byte / javascript:)</span></li>
+        <li><b><span class="zh">Schema 契约</span><span class="en">Schema contract</span></b> <span class="zh">~25 工具的 <code>required[]</code> 移除带默认值的键(Zod v4 toJSONSchema 透传 bug)· 去掉虚假 <code>additionalProperties:false</code> · 无 structuredContent 处移除 outputSchema(修 −32600)· ZodError → agent_instruction</span><span class="en"> removed defaulted keys from <code>required[]</code> across ~25 tools (Zod v4 toJSONSchema passthrough) · dropped false <code>additionalProperties:false</code> · removed outputSchema where no structuredContent (fixes −32600) · ZodError → agent_instruction</span></li>
+        <li><span class="zh">德语公共站抓取:Kufer/webbasys 名额 sprite 识别 · 德语标签-值表提取(50 词映射)· 批量紧凑摘要 · 保表截断 · health 环境变量已设未探测时显示 “configured (not verified)” 而非 active</span><span class="en"> German public-site scraping: Kufer/webbasys availability-sprite detection · German label-value table extraction (50-term map) · batch compact summary · table-preserving truncation · health shows “configured (not verified)” not active when env set-but-unprobed</span></li>
+      </ul>
+      <div class="note"><span class="zh">承接 0.8.5–0.8.10(NOV-578 系列)的加固。50 个 Sonnet-4.6 红队 agent 的发现合并为 2 个 taxonomy(NOV-673 契约 / NOV-674 安全),按 fix≠verify≠orchestrator 分离流程修复,全部经独立、真实凭证的 live 验证通过。</span><span class="en">Consolidates hardening from 0.8.5–0.8.10 (NOV-578 series). 50 Sonnet-4.6 red-team agents' findings merged into 2 taxonomies (NOV-673 contract / NOV-674 safety), fixed under a fix≠verify≠orchestrator separated process, all independently live-verified with real credentials.</span></div>
+    </div>
+  </details>
+
+  <!-- ============================================================ -->
   <!-- v0.8.9 BACKLOG BATCH B+C — 2026-06-30                       -->
   <!-- ============================================================ -->
-  <details class="card" open style="border-left: 4px solid var(--green);">
+  <details class="card" style="border-left: 4px solid var(--green);">
     <summary>
       <span class="date">2026-06-30</span>
       <span class="tag tag-feat"><span class="zh">功能 + 打磨</span><span class="en">Features + Polish</span></span>

@@ -367,3 +367,70 @@ describe("INVALID_API_KEY agent_instruction uses correct npm package", () => {
     expect(err.agent_instruction).not.toMatch(/npx -y novada(?!-mcp)/);
   });
 });
+
+// ─── redactSecrets — Group B NOV-674 additions ───────────────────────────────
+
+describe("redactSecrets — proxy username + local path masking (NOV-674)", () => {
+  it("masks a zone-res proxy username token", () => {
+    const out = redactSecrets("proxy auth failed for customer-x-zone-res-region-us-session-abc at endpoint");
+    expect(out).not.toContain("customer-x-zone-res");
+    expect(out).toContain("[proxy-username]");
+  });
+
+  it("masks a zone-isp proxy username token", () => {
+    const out = redactSecrets("error: user-abc123-zone-isp-session-xyz123");
+    expect(out).not.toContain("user-abc123-zone-isp");
+    expect(out).toContain("[proxy-username]");
+  });
+
+  it("masks a customer-…-zone-… style username (Novada format)", () => {
+    const out = redactSecrets("connect failed: customer-8xK9-zone-mob-session-sess1 rejected");
+    expect(out).not.toContain("customer-8xK9-zone-mob");
+    expect(out).toContain("[proxy-username]");
+  });
+
+  it("masks a /Users/… home directory path", () => {
+    const out = redactSecrets("config loaded from /Users/alice/.novada/config.json");
+    expect(out).not.toContain("/Users/alice");
+    expect(out).toContain("[local-path]");
+  });
+
+  it("masks a /home/… home directory path", () => {
+    const out = redactSecrets("cert at /home/ubuntu/.local/share/novada/cert.pem expired");
+    expect(out).not.toContain("/home/ubuntu");
+    expect(out).toContain("[local-path]");
+  });
+
+  it("leaves unrelated paths intact (e.g. /tmp, /var, /etc)", () => {
+    const out = redactSecrets("socket at /tmp/novada.sock");
+    // /tmp is not a home dir path — should not be redacted
+    expect(out).toContain("/tmp/novada.sock");
+  });
+
+  it("does not mask plain usernames without zone segment", () => {
+    // A plain username without '-zone-' should not be touched
+    const out = redactSecrets("connect error for myuser at proxy.example.com");
+    expect(out).toContain("myuser");
+    expect(out).not.toContain("[proxy-username]");
+  });
+});
+
+// ─── auth-class misclassification — Group B NOV-674 ─────────────────────────
+
+describe("devApiPost envelope code=401 → INVALID_API_KEY (NOV-674)", () => {
+  // classifyError handles HTTP-layer 401; the envelope-layer fix is in developer_api.ts.
+  // We verify the classifyError path still maps HTTP 401 correctly.
+  it("classifyError maps HTTP 401 message to INVALID_API_KEY with auth class", () => {
+    const err = classifyError(new Error("Request failed with HTTP 401 Unauthorized"));
+    expect(err.code).toBe(NovadaErrorCode.INVALID_API_KEY);
+    expect(err.retryable).toBe(false);
+    expect(err.agent_instruction).toContain("API key");
+  });
+
+  it("makeNovadaError INVALID_API_KEY has failure_class=auth in toAgentString", () => {
+    const err = makeNovadaError(NovadaErrorCode.INVALID_API_KEY, "bad key from 401 envelope");
+    const s = err.toAgentString();
+    expect(s).toContain("failure_class: auth");
+    expect(s).toContain("retry_recommended: false");
+  });
+});

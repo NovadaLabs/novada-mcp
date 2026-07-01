@@ -72,13 +72,15 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
     ].join("\n");
   }
 
-  const username = buildProxyUsername(proxyUser, params);
-  const encodedUser = encodeURIComponent(username);
+  // Mask username in output to prevent credential leakage
+  const maskedUser = proxyUser.slice(0, 4) + "***";
+  const maskedUsername = buildProxyUsername(maskedUser, params);
+  const encodedMaskedUser = encodeURIComponent(maskedUsername);
   const typeLabel = TYPE_LABELS[params.type] ?? params.type;
 
-  const maskedUrl = `http://${encodedUser}:***@${proxyEndpoint}`;
+  const maskedUrl = `http://${encodedMaskedUser}:***@${proxyEndpoint}`;
   // Shell-safe URL: uses ${NOVADA_PROXY_PASS} literal so credentials are never in tool output
-  const proxyUrlShell = `http://${encodedUser}:\${NOVADA_PROXY_PASS}@${proxyEndpoint}`;
+  const proxyUrlShell = `http://${encodedMaskedUser}:\${NOVADA_PROXY_PASS}@${proxyEndpoint}`;
   const endpointParts = proxyEndpoint.split(":");
   const proxyHost = endpointParts[0];
   const proxyPort = endpointParts[1] ? parseInt(endpointParts[1]) : 7777;
@@ -129,7 +131,7 @@ export async function novadaProxy(params: ProxyParams): Promise<string> {
     `## Usage Examples`,
     ``,
     `Node.js (axios):`,
-    `  proxy: { host: "${proxyHost}", port: ${proxyPort}, auth: { username: "${username}", password: "<NOVADA_PROXY_PASS>" } }`,
+    `  proxy: { host: "${proxyHost}", port: ${proxyPort}, auth: { username: "<PROXY_USER>", password: "<NOVADA_PROXY_PASS>" } }`,
     ``,
     `Python (requests):`,
     `  proxies = { "http": "${maskedUrl}", "https": "${maskedUrl}" }`,

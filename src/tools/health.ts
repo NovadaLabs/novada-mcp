@@ -4,7 +4,7 @@ import { SCRAPER_API_BASE, WEB_UNBLOCKER_BASE } from "../config.js";
 const PROBE_TIMEOUT_MS = 8000;
 
 interface ProbeResult {
-  status: "active" | "not_activated" | "not_configured" | "error";
+  status: "active" | "configured_unverified" | "not_activated" | "not_configured" | "error";
   label: string;
   latency: number | null;
   note?: string;
@@ -97,12 +97,13 @@ async function probeScraper(apiKey: string): Promise<ProbeResult> {
 function probeProxy(): ProbeResult {
   const creds = getProxyCredentials();
   if (creds) {
-    // Validate endpoint format: must contain ":" as a host:port separator
+    // FIX-5: We can only verify credentials are present — no live TCP probe here.
+    // Label as "configured (not verified)" rather than "Active" to avoid false-Active.
     const endpointValid = creds.endpoint.includes(":");
     if (endpointValid) {
-      return { status: "active", label: "Proxy", latency: null };
+      return { status: "configured_unverified", label: "Proxy", latency: null, note: "env vars present — no live probe" };
     }
-    return { status: "active", label: "Proxy", latency: null, note: "configured — connectivity unverified" };
+    return { status: "configured_unverified", label: "Proxy", latency: null, note: "env vars present — endpoint format may be wrong (expected host:port)" };
   }
   return {
     status: "not_configured",
@@ -132,9 +133,11 @@ function probeBrowser(): ProbeResult {
   if (ws) {
     const wsValid = ws.startsWith("wss://") && ws.includes("@");
     if (wsValid) {
-      return { status: "active", label: "Browser API", latency: null };
+      // FIX-5: NOVADA_BROWSER_WS is set and well-formed, but we don't do a live WebSocket probe.
+      // Label as "configured_unverified" to avoid claiming Active without a real connectivity check.
+      return { status: "configured_unverified", label: "Browser API", latency: null, note: "env var present — no live probe" };
     }
-    return { status: "active", label: "Browser API", latency: null, note: "NOVADA_BROWSER_WS format may be wrong — expected wss://user:pass@host" };
+    return { status: "configured_unverified", label: "Browser API", latency: null, note: "NOVADA_BROWSER_WS format may be wrong — expected wss://user:pass@host" };
   }
   return {
     status: "not_configured",
@@ -147,6 +150,7 @@ function probeBrowser(): ProbeResult {
 function statusIcon(r: ProbeResult): string {
   switch (r.status) {
     case "active": return "✅ Active";
+    case "configured_unverified": return "⚙️ Configured (not verified)";
     case "not_activated": return `❌ Not activated — ${r.note}`;
     case "not_configured": return `⚠️ Not configured — ${r.note}`;
     case "error": return `❌ Error: ${r.note}`;
@@ -178,6 +182,7 @@ export async function novadaHealth(apiKey: string): Promise<string> {
   ];
 
   const activeCount = results.filter(r => r.status === "active").length;
+  const configuredUnverifiedCount = results.filter(r => r.status === "configured_unverified").length;
   const notActivatedCount = results.filter(r => r.status === "not_activated").length;
   const notConfiguredCount = results.filter(r => r.status === "not_configured").length;
   const errorCount = results.filter(r => r.status === "error").length;
@@ -188,14 +193,16 @@ export async function novadaHealth(apiKey: string): Promise<string> {
     `api_key: ${maskedKey}`,
     `checked: ${new Date().toISOString()}`,
     "",
-    "| Product | Status | Latency |",
-    "|---------|--------|---------|",
+    "| Product | Status | Latency | Notes |",
+    "|---------|--------|---------|-------|",
   ];
 
   for (const r of results) {
-    lines.push(`| ${r.label} | ${statusIcon(r)} | ${latencyStr(r)} |`);
+    // FIX-5: Surface notes for all rows (including active) so "not verified" caveat is visible
+    const noteCell = r.note ? r.note : "";
+    lines.push(`| ${r.label} | ${statusIcon(r)} | ${latencyStr(r)} | ${noteCell} |`);
   }
-  lines.push(`| Output Pipeline | ✅ active — ~/Downloads/novada-mcp/ | — |`);
+  lines.push(`| Output Pipeline | ✅ active — ~/Downloads/novada-mcp/ | — | |`);
 
   lines.push("");
   lines.push("---");
@@ -203,6 +210,7 @@ export async function novadaHealth(apiKey: string): Promise<string> {
 
   const parts: string[] = [];
   if (activeCount > 0) parts.push(`${activeCount} active`);
+  if (configuredUnverifiedCount > 0) parts.push(`${configuredUnverifiedCount} configured (not verified)`);
   if (notActivatedCount > 0) parts.push(`${notActivatedCount} not activated`);
   if (notConfiguredCount > 0) parts.push(`${notConfiguredCount} not configured`);
   if (errorCount > 0) parts.push(`${errorCount} error`);
@@ -217,7 +225,9 @@ export async function novadaHealth(apiKey: string): Promise<string> {
     lines.push("");
     lines.push("## Next Steps");
     for (const r of needsAction) {
-      if (r.status === "not_activated") {
+      if (r.status === "configured_unverified") {
+        lines.push(`- ${r.label}: ${r.note} — connectivity not confirmed, but should work if credentials are valid`);
+      } else if (r.status === "not_activated") {
         lines.push(`- ${r.label}: Visit ${r.note} to activate`);
       } else if (r.status === "not_configured") {
         if (r.label === "Proxy") {

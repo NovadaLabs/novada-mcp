@@ -364,7 +364,7 @@ describe("P1-6: urls array alias", () => {
   // lock in that the batch path now honors per-page max_chars and never re-slices.
   const longHtml = `<html><head><title>Long</title></head><body><main>${"<p>Long content here paragraph. ".repeat(1500)}</p></main></body></html>`;
 
-  it("8-URL batch with max_chars=20000 keeps each page well above the old 3125-char cap and emits no batch sentinel", async () => {
+  it("8-URL batch compact contract: emits summary header, per-item flag line, and short snippet per page", async () => {
     mockedAxios.get.mockResolvedValue({ data: longHtml });
 
     // Unique URLs avoid colliding with the session-dedup cache populated by other tests
@@ -377,22 +377,30 @@ describe("P1-6: urls array alias", () => {
       max_chars: 20000,
     }, API_KEY);
 
+    // NOV-670: compact batch — summary header present
     expect(result).toContain("## Batch Extract Results");
     expect(result).toContain("urls:8");
     // The old per-URL re-truncation sentinel must be gone.
     expect(result).not.toContain("[truncated at");
 
-    // Each of the 8 page sections must carry far more than the old 3125-char cap.
-    const sections = result.split(/### \[\d+\/8\] /).slice(1);
+    // NOV-670: each of the 8 items appears in the inline summary
+    const sections = result.split(/### \[\d+\/8\]/).slice(1);
     expect(sections.length).toBe(8);
     for (const section of sections) {
-      // Strip the per-item flag line we add so we measure actual page content.
-      const body = section.replace(/^[^\n]*\n?returned_chars:[^\n]*\n/, "");
-      expect(body.length).toBeGreaterThan(3125);
+      // Each item must have a chars: flag line (compact contract)
+      expect(section).toMatch(/chars:\d+ \| content_truncated:(true|false)/);
+      // Full content is saved to disk — the inline section is a short snippet,
+      // so it must be significantly shorter than the full 20k per-page budget.
+      // perItemBudget = max(500, floor(20000/8)) = 2500 — snippet ≤ 2500 + overhead
+      expect(section.length).toBeLessThan(5000); // generous upper bound for snippet+flags
     }
+
+    // Full output path must be at the top (saves to disk)
+    const firstLine = result.split("\n")[0];
+    expect(firstLine.startsWith("path: ")).toBe(true);
   });
 
-  it("batch emits per-item returned_chars + content_truncated flags", async () => {
+  it("NOV-670 compact: batch emits per-item chars + content_truncated flags in new format", async () => {
     mockedAxios.get.mockResolvedValue({ data: longHtml });
 
     const result = await novadaExtract({
@@ -403,13 +411,22 @@ describe("P1-6: urls array alias", () => {
     }, API_KEY);
 
     expect(result).toContain("## Batch Extract Results");
-    // Per-item flags appear once per page (2 pages).
-    const flagLines = result.split("\n").filter(l => /^returned_chars:\d+ \| content_truncated:(true|false)/.test(l));
+
+    // NOV-670 compact contract: per-item flag line uses `chars:` (not `returned_chars:`).
+    // Format: "chars:N | content_truncated:true|false | total_chars:N"
+    const flagLines = result.split("\n").filter(l => /^chars:\d+ \| content_truncated:(true|false)/.test(l));
     expect(flagLines.length).toBe(2);
+
     // With max_chars=4000 on a long page, each item should be truncated.
+    // perItemBudget = max(500, floor(4000/2)) = 2000 chars/item
     expect(flagLines.every(l => l.includes("content_truncated:true"))).toBe(true);
-    // total_chars surfaces when the inner block exposed it.
+
+    // total_chars surfaces when the inner extractSingle block exposed it
     expect(flagLines.every(l => /total_chars:\d+/.test(l))).toBe(true);
+
+    // Full content saved to disk — path appears at top
+    const firstLine = result.split("\n")[0];
+    expect(firstLine.startsWith("path: ")).toBe(true);
   });
 
   it("batch persists full output to disk and puts the path at the TOP of the result", async () => {

@@ -14,7 +14,7 @@ const PROBE_TIMEOUT_MS = 20000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ProbeStatus = "active" | "not_activated" | "not_configured" | "misconfigured" | "error";
+type ProbeStatus = "active" | "configured_unverified" | "not_activated" | "not_configured" | "misconfigured" | "error";
 
 interface ProductProbeResult {
   product: string;
@@ -257,11 +257,13 @@ function probeProxyAll(): ProductProbeResult {
       activationLink: "https://dashboard.novada.com/overview/proxy/",
     };
   }
+  // FIX-5: Credentials are present and well-formed, but no live TCP probe is done.
+  // Label "configured_unverified" so agents don't treat this as proof of connectivity.
   return {
     product: "Proxy",
-    status: "active",
+    status: "configured_unverified",
     latency: null,
-    notes: "Credentials found in env",
+    notes: "env vars present — no live probe",
   };
 }
 
@@ -299,11 +301,13 @@ function probeBrowserAll(): ProductProbeResult {
       activationLink: "https://dashboard.novada.com/overview/browser/",
     };
   }
+  // FIX-5: NOVADA_BROWSER_WS is set and well-formed, but no live WebSocket probe is done.
+  // Label "configured_unverified" to avoid claiming Active without a real connectivity check.
   return {
     product: "Browser API",
-    status: "active",
+    status: "configured_unverified",
     latency: null,
-    notes: "NOVADA_BROWSER_WS is set",
+    notes: "env var present — no live probe",
   };
 }
 
@@ -323,11 +327,12 @@ async function probeUnblockAll(apiKey: string): Promise<ProductProbeResult> {
 
 function statusIcon(status: ProbeStatus): string {
   switch (status) {
-    case "active":         return "✅ Active";
-    case "not_activated":  return "❌ Not activated";
-    case "not_configured": return "⚠️ Not configured";
-    case "misconfigured":  return "⚠️ Misconfigured";
-    case "error":          return "❌ Error";
+    case "active":               return "✅ Active";
+    case "configured_unverified": return "⚙️ Configured (not verified)";
+    case "not_activated":        return "❌ Not activated";
+    case "not_configured":       return "⚠️ Not configured";
+    case "misconfigured":        return "⚠️ Misconfigured";
+    case "error":                return "❌ Error";
   }
 }
 
@@ -374,11 +379,12 @@ export async function novadaHealthAll(apiKey: string): Promise<string> {
     unblockSettled.status === "fulfilled" ? unblockSettled.value : errorFallback("Unblock API"),
   ];
 
-  const activeCount        = results.filter(r => r.status === "active").length;
-  const unavailableCount   = results.filter(r => r.status === "not_activated").length;
-  const unconfiguredCount  = results.filter(r => r.status === "not_configured").length;
-  const misconfiguredCount = results.filter(r => r.status === "misconfigured").length;
-  const errorCount         = results.filter(r => r.status === "error").length;
+  const activeCount              = results.filter(r => r.status === "active").length;
+  const configuredUnverifiedCount = results.filter(r => r.status === "configured_unverified").length;
+  const unavailableCount         = results.filter(r => r.status === "not_activated").length;
+  const unconfiguredCount        = results.filter(r => r.status === "not_configured").length;
+  const misconfiguredCount       = results.filter(r => r.status === "misconfigured").length;
+  const errorCount               = results.filter(r => r.status === "error").length;
 
   const lines: string[] = [
     "## Novada API — Extended Health Check",
@@ -401,11 +407,12 @@ export async function novadaHealthAll(apiKey: string): Promise<string> {
   lines.push("## Summary");
 
   const parts: string[] = [];
-  if (activeCount > 0)        parts.push(`${activeCount} active`);
-  if (unavailableCount > 0)   parts.push(`${unavailableCount} not activated`);
-  if (unconfiguredCount > 0)  parts.push(`${unconfiguredCount} not configured`);
-  if (misconfiguredCount > 0) parts.push(`${misconfiguredCount} misconfigured`);
-  if (errorCount > 0)         parts.push(`${errorCount} error`);
+  if (activeCount > 0)               parts.push(`${activeCount} active`);
+  if (configuredUnverifiedCount > 0) parts.push(`${configuredUnverifiedCount} configured (not verified)`);
+  if (unavailableCount > 0)          parts.push(`${unavailableCount} not activated`);
+  if (unconfiguredCount > 0)         parts.push(`${unconfiguredCount} not configured`);
+  if (misconfiguredCount > 0)        parts.push(`${misconfiguredCount} misconfigured`);
+  if (errorCount > 0)                parts.push(`${errorCount} error`);
   lines.push(`- ${parts.join("  |  ")}`);
 
   const needsAction = results.filter(r => r.status !== "active");
@@ -419,7 +426,9 @@ export async function novadaHealthAll(apiKey: string): Promise<string> {
     lines.push("");
     lines.push("## Next Steps");
     for (const r of needsAction) {
-      if (r.status === "not_activated") {
+      if (r.status === "configured_unverified") {
+        lines.push(`- **${r.product}** — ${r.notes} — connectivity not confirmed, but should work if credentials are valid`);
+      } else if (r.status === "not_activated") {
         const link = r.activationLink ?? "https://dashboard.novada.com/overview/scraper/";
         lines.push(
           `- **${r.product}** — Not activated. Activate at: ${link}`

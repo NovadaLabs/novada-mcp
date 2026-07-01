@@ -66,7 +66,8 @@ describe("novadaUnblock", () => {
     expect(result).toContain("novada_extract");
   });
 
-  it("truncates HTML over 50K chars", async () => {
+  it("truncates HTML when content exceeds max_chars", async () => {
+    // Use a max_chars smaller than the HTML so truncation fires
     const bigHtml = "<html>" + "x".repeat(60000) + "</html>";
     vi.mocked(axios).post.mockResolvedValue({
       data: { code: 0, data: { code: 200, html: bigHtml } },
@@ -77,8 +78,12 @@ describe("novadaUnblock", () => {
       url: "https://example.com",
       method: "render",
       timeout: 30000,
+      max_chars: 50000,
     }, "api-key");
 
-    expect(result).toContain("truncated to 50000");
+    expect(result).toContain("truncated: true");
+    expect(result).toContain("truncated_hint:");
+    // chars_returned should equal max_chars
+    expect(result).toContain("chars_returned: 50000");
   });
 });

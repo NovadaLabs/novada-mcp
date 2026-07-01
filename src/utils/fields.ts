@@ -170,6 +170,100 @@ const PATTERN_MAP: Record<string, RegExp[]> = {
 };
 
 /**
+ * German label → canonical English field name (lower-cased keys → canonical lower-cased name).
+ *
+ * NOV-669: 2-column German label-value tables (e.g. VHS course pages) use German labels that
+ * score 0 against English canonical field names in labelMatchScore. This map bridges the gap
+ * so "Beginn"→"date", "Status"→"availability_status", etc. resolve correctly.
+ *
+ * Bidirectional: callers pass the English canonical field name and this map is consulted to
+ * find which German labels are equivalent, then those are checked against the DOM label.
+ */
+const GERMAN_LABEL_MAP: Record<string, string> = {
+  // date / time
+  "beginn": "date",
+  "ende": "date",
+  "datum": "date",
+  "startdatum": "date",
+  "enddatum": "date",
+  "uhrzeit": "time",
+  "anfangszeit": "time",
+  "endzeit": "time",
+  "termine": "dates",
+  // availability
+  "status": "availability_status",
+  "kursstatus": "availability_status",
+  "verfügbarkeit": "availability_status",
+  // price / cost
+  "kursentgelt": "price",
+  "entgelt": "price",
+  "gebühr": "price",
+  "preis": "price",
+  "kosten": "price",
+  "teilnahmegebühr": "price",
+  // location
+  "kursort": "location",
+  "ort": "location",
+  "veranstaltungsort": "location",
+  "raum": "location",
+  // duration
+  "dauer": "duration",
+  // instructor / teacher
+  "kursleitung": "instructor",
+  "dozent": "instructor",
+  "dozentin": "instructor",
+  "lehrkraft": "instructor",
+  "leitung": "instructor",
+  // registration / deadline
+  "anmeldeschluss": "registration_deadline",
+  "anmeldefrist": "registration_deadline",
+  // course number / id
+  "kursnummer": "course_number",
+  "kurs-nr.": "course_number",
+  "nr.": "course_number",
+  "kursnr.": "course_number",
+  // participants
+  "mindestteilnehmerzahl": "participants",
+  "höchstteilnehmerzahl": "participants",
+  "teilnehmerzahl": "participants",
+  "teilnehmer": "participants",
+  // notes / remarks
+  "bemerkungen": "notes",
+  "hinweise": "notes",
+  "anmerkungen": "notes",
+};
+
+/**
+ * Reverse map: canonical English field → array of German labels that are equivalent.
+ * Built once from GERMAN_LABEL_MAP so lookups are O(1) per field.
+ */
+const CANONICAL_TO_GERMAN: Map<string, string[]> = new Map();
+for (const [german, canonical] of Object.entries(GERMAN_LABEL_MAP)) {
+  const existing = CANONICAL_TO_GERMAN.get(canonical) ?? [];
+  existing.push(german);
+  CANONICAL_TO_GERMAN.set(canonical, existing);
+}
+
+/**
+ * Extended label-match score that also checks German synonyms.
+ * Returns the same score scale as labelMatchScore (3/2/1/0) but also fires when
+ * the DOM label is a German synonym of the requested canonical field.
+ */
+function labelMatchScoreWithGerman(label: string, canonical: string): number {
+  // First try native fuzzy match (exact/startsWith/includes on the English field).
+  const nativeScore = labelMatchScore(label, canonical);
+  if (nativeScore > 0) return nativeScore;
+
+  // Then try German synonym lookup: does this label map to the canonical field?
+  const l = label.toLowerCase().trim();
+  // Direct lookup: is this German label a synonym of `canonical`?
+  const mappedCanonical = GERMAN_LABEL_MAP[l];
+  if (mappedCanonical === canonical) return 2; // treat like startsWith match
+
+  return 0;
+}
+
+/**
  * Field-alias map: normalize agent-friendly field names to the canonical key used by
  * PATTERN_MAP and the label-matching layers. Lower-cased keys → canonical lower-cased name.
  * Applied to derive `lower` before any layer runs.
@@ -223,6 +317,11 @@ function labelMatchScore(label: string, field: string): number {
   const f = field.toLowerCase().trim();
   if (!l || !f) return 0;
   if (l === f) return 3;
+  // NOV-578 #3: bound fuzzy (startsWith/includes) matching to labels/fields of ≥3 chars.
+  // A 1–2 char field ("id", "pe", "p") would otherwise substring-match unrelated labels
+  // ("video_id", "identifier", "president") and resolve to the wrong value. Exact match
+  // (above) still works at any length, so a column literally named "id" is unaffected.
+  if (Math.min(l.length, f.length) < 3) return 0;
   if (l.startsWith(f) || f.startsWith(l)) return 2;
   if (l.includes(f) || f.includes(l)) return 1;
   return 0;
@@ -360,8 +459,20 @@ function collectDomCandidates($: CheerioAPI): DomCandidates {
   });
 
   // Row-label pairs: table rows (cell0 = label, cell1 = value) + <dl> dt/dd pairs.
-  // Shape constraint matches extractFromLabelValueRows: skip values > 80 chars (prose, not a stat).
-  const considerRow = (rawLabel: string, rawValue: string) => {
+  // Two caps:
+  //   - Table cells (structured): 200 chars — real label-value tables can hold addresses,
+  //     long instructor names, full datetime strings (e.g. German VHS pages). A table cell
+  //     value is structurally a datum, not free prose, so raising the cap here is safe.
+  //   - dl dt/dd (definition lists, more prose-adjacent): 80 chars — keeps the original
+  //     conservative guard to avoid harvesting paragraph-length definition text.
+  const considerTableRow = (rawLabel: string, rawValue: string) => {
+    const label = rawLabel.trim();
+    const value = rawValue.trim();
+    if (!label || !value) return;
+    if (value.length > 200) return;
+    labelValueRows.push({ label, value: value.slice(0, 200) });
+  };
+  const considerDlRow = (rawLabel: string, rawValue: string) => {
     const label = rawLabel.trim();
     const value = rawValue.trim();
     if (!label || !value) return;
@@ -371,12 +482,12 @@ function collectDomCandidates($: CheerioAPI): DomCandidates {
   $("tr").each((_, tr) => {
     const cells = $(tr).find("th, td");
     if (cells.length < 2) return;
-    considerRow($(cells[0]).text(), $(cells[1]).text());
+    considerTableRow($(cells[0]).text(), $(cells[1]).text());
   });
   $("dl").each((_, dl) => {
     $(dl).find("dt").each((__, dt) => {
       const dd = $(dt).next("dd");
-      if (dd.length) considerRow($(dt).text(), dd.text());
+      if (dd.length) considerDlRow($(dt).text(), dd.text());
     });
   });
 
@@ -420,7 +531,7 @@ function collectDomCandidates($: CheerioAPI): DomCandidates {
 function extractFromInfobox(cand: DomCandidates, fieldName: string): string | null {
   const best: LabelMatch = { score: 0, value: null };
   for (const row of cand.infoboxRows) {
-    const score = labelMatchScore(row.label, fieldName);
+    const score = labelMatchScoreWithGerman(row.label, fieldName);
     if (score > 0 && score > best.score) {
       best.score = score;
       best.value = row.value;
@@ -454,7 +565,7 @@ function extractFromTableHeaders(cand: DomCandidates, fieldName: string): string
 function extractFromLabelValueRows(cand: DomCandidates, fieldName: string): string | null {
   const best: LabelMatch = { score: 0, value: null };
   for (const row of cand.labelValueRows) {
-    const score = labelMatchScore(row.label, fieldName);
+    const score = labelMatchScoreWithGerman(row.label, fieldName);
     if (score > 0 && score > best.score) {
       best.score = score;
       best.value = row.value;

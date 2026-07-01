@@ -63,6 +63,65 @@ function normalizeStatus(raw: string | undefined): TaskStatus {
 }
 
 /**
+ * Lightweight existence check for a task_id.
+ * Uses the same primary devApiPost path that novadaScraperStatus uses, plus
+ * the fallback GET endpoint (which returns HTTP 404 definitively for unknown ids).
+ *
+ * Returns:
+ *   "exists"    — task is known to the API (any status: pending/running/complete/failed)
+ *   "not_found" — API definitively returned 404 or explicitly indicated unknown task
+ *   "unknown"   — both checks failed (network error, auth issue, etc.) — caller should
+ *                 surface ambiguity honestly rather than fabricating a verdict
+ */
+export async function checkTaskExists(
+  task_id: string,
+  apiKey: string
+): Promise<"exists" | "not_found" | "unknown"> {
+  // Primary check: POST /v1/scraper/task_status
+  try {
+    interface TaskStatusData {
+      task_id?: string;
+      status?: string;
+      msg?: string;
+    }
+    const statusResp = await devApiPost<TaskStatusData>(
+      "/v1/scraper/task_status",
+      { task_ids: task_id },
+      { apiKey, timeoutMs: 10_000 }
+    );
+    const rawStatus = (statusResp as TaskStatusData)?.status;
+    // If we got a non-empty status back, the task exists.
+    if (rawStatus) return "exists";
+    // Empty status with code=0 — ambiguous; fall through to the GET fallback.
+  } catch {
+    // devApiPost threw (non-zero code or network error) — fall through to GET fallback.
+  }
+
+  // Fallback: GET the status endpoint directly — returns HTTP 404 for unknown ids.
+  try {
+    const STATUS_ENDPOINT = `${STATUS_BASE}/${encodeURIComponent(task_id)}`;
+    const resp = await axios.get(STATUS_ENDPOINT, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      timeout: 10_000,
+      validateStatus: () => true, // inspect status ourselves
+    });
+    if (resp.status === 404) return "not_found";
+    if (resp.status === 401 || resp.status === 403) return "unknown"; // auth failure — can't confirm
+    if (resp.status >= 200 && resp.status < 500) {
+      // Any 2xx/3xx response means the endpoint knows about this id.
+      // A code=27202 body here would mean pending (still exists).
+      const body = resp.data as Record<string, unknown> | undefined;
+      if (body && typeof body === "object" && (body as Record<string, unknown>).code === 27202) return "exists";
+      return "exists";
+    }
+    // 5xx — server error, can't confirm
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
  * Poll the status of an async scraping task by task_id.
  * Returns the current status and result if complete.
  */
@@ -89,6 +148,14 @@ export async function novadaScraperStatus(
 
     const rawStatus = (statusResp as TaskStatusData)?.status;
     const normalized = normalizeStatus(rawStatus);
+
+    // NOV-666: if the API returned successfully (code=0) but status is absent/null,
+    // the task_id may not exist (some APIs return { code:0, data:{} } for unknown ids
+    // rather than an error code). Do NOT silently return "pending" — fall through to
+    // the fallback GET endpoint which gives a definitive 404 for unknown task_ids.
+    if (!rawStatus) {
+      throw new Error("primary_status_empty"); // sentinel: handled in catch → falls through to fallback
+    }
 
     switch (normalized) {
       case "complete":

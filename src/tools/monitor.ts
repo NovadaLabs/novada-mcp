@@ -1,6 +1,17 @@
 import { createHash } from "crypto";
 import { z } from "zod";
 import { novadaExtract } from "./extract.js";
+import { redactSecrets } from "../_core/errors.js";
+
+/**
+ * Strip the path: /abs/path header that extract.ts prepends to its output before
+ * computing the content hash and storing the preview — prevents absolute local paths
+ * from leaking into the stored MonitorEntry and agent-visible output (FIX-1).
+ */
+function stripExtractPathHeader(content: string): string {
+  // extract.ts prepends `path: /Users/.../file\n\n` (or `📁 /path\n\n`)
+  return content.replace(/^(?:path|📁)[^\n]*\n\n?/, "");
+}
 
 // ─── URL Safety (duplicated from types.ts — safeUrl is not exported) ────────
 
@@ -170,11 +181,15 @@ export async function novadaMonitor(params: MonitorParams, apiKey?: string): Pro
     return formatError(params.url, now, message);
   }
 
-  // 2. Hash the content
-  const hash = createHash("sha256").update(content).digest("hex").slice(0, 16);
+  // FIX-1: Strip absolute path header that extract prepends — prevents path leakage
+  // in the stored MonitorEntry (content_preview, hash input).
+  const cleanContent = stripExtractPathHeader(content);
+
+  // 2. Hash the content (use cleanContent so path changes don't cause false change detection)
+  const hash = createHash("sha256").update(cleanContent).digest("hex").slice(0, 16);
 
   // 3. Extract field values from the content
-  const currentFields = extractFieldValues(content, params.fields);
+  const currentFields = extractFieldValues(cleanContent, params.fields);
 
   // 4. Check previous state
   const prev = monitorStore.get(params.url);
@@ -183,23 +198,25 @@ export async function novadaMonitor(params: MonitorParams, apiKey?: string): Pro
   const checkCount = prev ? prev.check_count + 1 : 1;
   const hasChanged = prev ? prev.hash !== hash : false;
   const checksSinceChange = hasChanged ? 0 : (prev ? prev.checks_since_change + 1 : 0);
+  // FIX-1: Store cleanContent (no path header) in preview, then redact any remaining paths.
+  const safePreview = redactSecrets(cleanContent.slice(0, 500));
 
   monitorStore.set(params.url, {
     hash,
     fields: currentFields,
     timestamp: now,
-    content_preview: content.slice(0, 500),
+    content_preview: safePreview,
     check_count: checkCount,
     checks_since_change: checksSinceChange,
   });
 
   // 6. Format response based on state
   if (params.format === "json") {
-    return formatJson(params, prev, { hash, fields: currentFields, timestamp: now, content_preview: content.slice(0, 500), check_count: checkCount, checks_since_change: checksSinceChange });
+    return formatJson(params, prev, { hash, fields: currentFields, timestamp: now, content_preview: safePreview, check_count: checkCount, checks_since_change: checksSinceChange });
   }
 
   if (!prev) {
-    return formatFirstCheck(params, hash, now, currentFields, content);
+    return formatFirstCheck(params, hash, now, currentFields, cleanContent);
   }
 
   if (!hasChanged) {
